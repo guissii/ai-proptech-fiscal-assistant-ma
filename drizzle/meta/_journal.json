@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1777466939629,
+      "tag": "0000_concerned_proteus",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1777467328187,
+      "tag": "0001_lame_unus",
+      "breakpoints": true
+    }
+  ]
+}
