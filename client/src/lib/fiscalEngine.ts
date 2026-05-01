@@ -30,6 +30,17 @@ export interface LocationSimulation {
   dureeDetention: number;
   typeImmobilier: 'meuble' | 'non-meuble';
   depensesAnnuelles: number;
+  investorType?: 'individual' | 'company';
+  vacancyRatePct?: number;
+  managementFeePct?: number;
+  insuranceAnnual?: number;
+  propertyTaxesAnnual?: number;
+  salaryAnnual?: number;
+  taxYear?: number;
+  financing?: 'cash' | 'credit';
+  downPayment?: number;
+  loanYears?: number;
+  interestRatePct?: number;
 }
 
 export interface LocationResults {
@@ -41,6 +52,12 @@ export interface LocationResults {
   irAnnuel: number;
   baseImposable: number;
   abattementFoncier: number;
+  revenuBrutEffectif: number;
+  fraisGestion: number;
+  chargesNonFiscales: number;
+  mensualiteCredit: number;
+  cashflowNetMensuel: number;
+  irIncremental: number;
 }
 
 export interface AirbnbSimulation {
@@ -50,6 +67,11 @@ export interface AirbnbSimulation {
   tauxCommissionAirbnb: number;
   tauxTaxesSejour: number;
   depensesAnnuelles: number;
+  investorType?: 'individual' | 'company';
+  managementFeePct?: number;
+  vacancyRatePct?: number;
+  salaryAnnual?: number;
+  taxYear?: number;
 }
 
 export interface AirbnbResults {
@@ -60,6 +82,10 @@ export interface AirbnbResults {
   revenuNetMensuel: number;
   revenuNetAnnuel: number;
   rendementAnnuel: number;
+  revenuBrutEffectifAnnuel: number;
+  fraisGestion: number;
+  chargesNonFiscales: number;
+  irIncremental: number;
 }
 
 export interface DetentionSimulation {
@@ -156,42 +182,89 @@ export function calculateAchatCosts(sim: AchatSimulation): AchatResults {
 // ============ LOCATION ============
 
 export function calculateLocationRevenue(sim: LocationSimulation): LocationResults {
-  const { prixAcquisition, loyer, dureeDetention, typeImmobilier, depensesAnnuelles } = sim;
+  const {
+    prixAcquisition,
+    loyer,
+    dureeDetention,
+    typeImmobilier,
+    depensesAnnuelles,
+    investorType = 'individual',
+    vacancyRatePct = 0,
+    managementFeePct = 0,
+    insuranceAnnual = 0,
+    propertyTaxesAnnual = 0,
+    salaryAnnual = 0,
+    taxYear = 2026,
+    financing = 'cash',
+    downPayment = 0,
+    loanYears = 0,
+    interestRatePct = 0,
+  } = sim;
 
   // Revenu brut annuel
   const revenuBrut = loyer * 12;
 
-  const abattementFoncier = 0.4;
-  const baseImposable = Math.max(0, revenuBrut * (1 - abattementFoncier));
-  const irAnnuel = calculateIRRevenusFonciers(baseImposable);
+  const vacPct = Math.min(50, Math.max(0, vacancyRatePct));
+  const revenuBrutEffectif = revenuBrut * (1 - vacPct / 100);
 
-  const revenuNetAvantIR = revenuBrut - depensesAnnuelles;
-  const revenuNet = revenuNetAvantIR - irAnnuel;
+  const mgmtPct = Math.min(30, Math.max(0, managementFeePct));
+  const fraisGestion = revenuBrutEffectif * (mgmtPct / 100);
+
+  const abattementFoncier = 0.4;
+  const baseImposable = Math.max(0, revenuBrutEffectif * (1 - abattementFoncier));
+  const irAnnuel = calculateIRRevenusFonciers(baseImposable);
+  const irIncremental =
+    investorType === 'company'
+      ? 0
+      : calculateIRIncrementalFromAdditionalIncome({
+          baseIncomeAnnual: salaryAnnual,
+          additionalIncomeAnnual: baseImposable,
+          taxYear,
+        });
+
+  const chargesNonFiscales = depensesAnnuelles + fraisGestion + insuranceAnnual + propertyTaxesAnnual;
+  const revenuNetAvantImpots = revenuBrutEffectif - chargesNonFiscales;
+
+  const taxes =
+    investorType === 'company'
+      ? Math.max(0, revenuNetAvantImpots) * 0.2
+      : irAnnuel;
+  const revenuNet = revenuNetAvantImpots - taxes;
+
+  const principal = Math.max(0, prixAcquisition - Math.max(0, downPayment));
+  const mensualiteCredit =
+    financing === 'credit' && loanYears > 0 && interestRatePct > 0
+      ? calculateMonthlyLoanPayment(principal, interestRatePct, loanYears)
+      : 0;
+
+  const cashflowNetMensuel = (revenuNet - mensualiteCredit * 12) / 12;
 
   // Rendements
-  const rendementBrut = (revenuBrut / prixAcquisition) * 100;
+  const rendementBrut = (revenuBrutEffectif / prixAcquisition) * 100;
   const rendementNet = (revenuNet / prixAcquisition) * 100;
 
   return {
     revenuBrut,
-    chargesFiscales: irAnnuel,
+    chargesFiscales: taxes,
     revenuNet,
     rendementBrut,
     rendementNet,
-    irAnnuel,
+    irAnnuel: taxes,
     baseImposable,
     abattementFoncier,
+    revenuBrutEffectif,
+    fraisGestion,
+    chargesNonFiscales,
+    mensualiteCredit,
+    cashflowNetMensuel,
+    irIncremental,
   };
 }
 
 export function calculateIRRevenusFonciers(revenuFoncierNetImposableAnnuel: number): number {
   const x = Math.max(0, revenuFoncierNetImposableAnnuel);
-  const t1 = 30000;
-  const t2 = 120000;
-
-  if (x <= t1) return 0;
-  if (x <= t2) return (x - t1) * 0.1;
-  return (t2 - t1) * 0.1 + (x - t2) * 0.15;
+  const t = 120000;
+  return x < t ? x * 0.1 : x * 0.15;
 }
 
 // ============ AIRBNB ============
@@ -204,6 +277,11 @@ export function calculateAirbnbRevenue(sim: AirbnbSimulation): AirbnbResults {
     tauxCommissionAirbnb,
     tauxTaxesSejour,
     depensesAnnuelles,
+    investorType = 'individual',
+    managementFeePct = 0,
+    vacancyRatePct = 0,
+    salaryAnnual = 0,
+    taxYear = 2026,
   } = sim;
 
   const occupationPct = tauxOccupation <= 1 ? tauxOccupation * 100 : tauxOccupation;
@@ -212,20 +290,40 @@ export function calculateAirbnbRevenue(sim: AirbnbSimulation): AirbnbResults {
   // Revenu brut annuel
   const revenuBrutAnnuel = loyerNuit * joursOccupation;
 
+  const vacPct = Math.min(50, Math.max(0, vacancyRatePct));
+  const revenuBrutEffectifAnnuel = revenuBrutAnnuel * (1 - vacPct / 100);
+
   // Commissions Airbnb (3% standard)
-  const commissionsAirbnb = revenuBrutAnnuel * tauxCommissionAirbnb;
+  const commissionsAirbnb = revenuBrutEffectifAnnuel * tauxCommissionAirbnb;
 
   // Taxes de séjour (environ 1-2% du revenu)
-  const taxesSejour = revenuBrutAnnuel * tauxTaxesSejour;
+  const taxesSejour = revenuBrutEffectifAnnuel * tauxTaxesSejour;
+
+  const mgmtPct = Math.min(30, Math.max(0, managementFeePct));
+  const fraisGestion = revenuBrutEffectifAnnuel * (mgmtPct / 100);
 
   // Revenu net avant charges
-  const revenuNetAvantCharges = revenuBrutAnnuel - commissionsAirbnb - taxesSejour;
+  const revenuNetAvantCharges = revenuBrutEffectifAnnuel - commissionsAirbnb - taxesSejour - fraisGestion;
+  const profitAvantImpots = Math.max(0, revenuNetAvantCharges - depensesAnnuelles);
 
   // IR sur revenus Airbnb (taux plus élevé, activité commerciale)
-  const chargesFiscales = calculateIRAirbnb(revenuNetAvantCharges);
+  const irAirbnb = calculateIRAirbnb(profitAvantImpots);
+  const irIncremental = calculateIRIncrementalFromAdditionalIncome({
+    baseIncomeAnnual: salaryAnnual,
+    additionalIncomeAnnual: profitAvantImpots,
+    taxYear,
+  });
+  const irIncrementalSafe = investorType === 'company' ? 0 : irIncremental;
+  const chargesFiscales =
+    investorType === 'company'
+      ? profitAvantImpots * 0.2
+      : salaryAnnual > 0
+        ? irIncrementalSafe
+        : irAirbnb;
 
   // Revenu net final
-  const revenuNetAnnuel = revenuNetAvantCharges - chargesFiscales - depensesAnnuelles;
+  const chargesNonFiscales = depensesAnnuelles + commissionsAirbnb + taxesSejour + fraisGestion;
+  const revenuNetAnnuel = (revenuNetAvantCharges - depensesAnnuelles) - chargesFiscales;
   const revenuNetMensuel = revenuNetAnnuel / 12;
 
   // Rendement annuel
@@ -239,6 +337,10 @@ export function calculateAirbnbRevenue(sim: AirbnbSimulation): AirbnbResults {
     revenuNetMensuel,
     revenuNetAnnuel,
     rendementAnnuel,
+    revenuBrutEffectifAnnuel,
+    fraisGestion,
+    chargesNonFiscales,
+    irIncremental: irIncrementalSafe,
   };
 }
 
@@ -248,6 +350,55 @@ function calculateIRAirbnb(revenuNet: number): number {
   if (revenuNet <= 50000) return 1500 + (revenuNet - 30000) * 0.15;
   if (revenuNet <= 100000) return 4500 + (revenuNet - 50000) * 0.25;
   return 16000 + (revenuNet - 100000) * 0.35;
+}
+
+function calculateMonthlyLoanPayment(principal: number, annualRatePct: number, years: number): number {
+  const p = Math.max(0, principal);
+  const y = Math.max(0, years);
+  const r = Math.max(0, annualRatePct) / 100 / 12;
+  const n = Math.round(y * 12);
+  if (!p || !n) return 0;
+  if (!r) return p / n;
+  const factor = Math.pow(1 + r, n);
+  return (p * r * factor) / (factor - 1);
+}
+
+function calculateIRProgressiveAnnual(incomeAnnual: number, taxYear: number): number {
+  const x = Math.max(0, incomeAnnual);
+  const year = Number.isFinite(taxYear) ? Math.trunc(taxYear) : 2026;
+
+  const table =
+    year >= 2024
+      ? [
+          { max: 30000, rate: 0, deduction: 0 },
+          { max: 50000, rate: 0.1, deduction: 3000 },
+          { max: 60000, rate: 0.2, deduction: 8000 },
+          { max: 80000, rate: 0.3, deduction: 14000 },
+          { max: 180000, rate: 0.34, deduction: 17200 },
+          { max: Infinity, rate: 0.38, deduction: 24400 },
+        ]
+      : [
+          { max: 30000, rate: 0, deduction: 0 },
+          { max: 50000, rate: 0.1, deduction: 3000 },
+          { max: 60000, rate: 0.2, deduction: 8000 },
+          { max: 80000, rate: 0.3, deduction: 14000 },
+          { max: 180000, rate: 0.34, deduction: 17200 },
+          { max: Infinity, rate: 0.38, deduction: 24400 },
+        ];
+
+  const row = table.find(t => x <= t.max) ?? table[table.length - 1];
+  return Math.max(0, x * row.rate - row.deduction);
+}
+
+function calculateIRIncrementalFromAdditionalIncome(args: {
+  baseIncomeAnnual: number;
+  additionalIncomeAnnual: number;
+  taxYear: number;
+}): number {
+  const base = Math.max(0, args.baseIncomeAnnual);
+  const add = Math.max(0, args.additionalIncomeAnnual);
+  const total = base + add;
+  return calculateIRProgressiveAnnual(total, args.taxYear) - calculateIRProgressiveAnnual(base, args.taxYear);
 }
 
 // ============ DÉTENTION ============
@@ -304,51 +455,55 @@ export function calculateDetentionCosts(sim: DetentionSimulation): DetentionResu
 export function calculateTpi(sim: TpiSimulation): TpiResults {
   const { prixVente, prixAcquisition, dureeDetention, typeImmobilier, travaux, isResidencePrincipale } = sim;
 
-  const plusValue = prixVente - prixAcquisition;
+  const held = Math.max(1, Math.min(40, Math.trunc(dureeDetention)));
+  const fraisAcquisitionForfait = prixAcquisition * 0.15;
+  const coefficientRevalorisation = 1 + 0.03 * held;
 
-  // Scénario A : TPI standard 20%
+  const coutRevientBase = prixAcquisition * coefficientRevalorisation + fraisAcquisitionForfait;
+  const coutRevientAvecTravaux = coutRevientBase + Math.max(0, travaux);
+
+  const profitBase = prixVente - coutRevientBase;
+  const profitAvecTravaux = prixVente - coutRevientAvecTravaux;
+
+  const tauxTpi = 0.2;
+  const cotisationMinimale = prixVente * 0.03;
+
+  const tpiStandard = Math.max(0, profitBase * tauxTpi);
+  const tpiTravaux = Math.max(0, profitAvecTravaux * tauxTpi);
+
   const scenarioA: TpiScenario = {
-    name: 'Scénario A',
-    description: 'TPI standard 20%',
-    tauxTpi: 0.20,
-    montantTpi: plusValue * 0.20,
-    montantDeductible: 0,
-    netVendeur: prixVente - plusValue * 0.20,
-    cotisationMinimale: 0,
-  };
-
-  // Scénario B : Exonération résidence principale
-  const scenarioB: TpiScenario = {
-    name: 'Scénario B',
-    description: 'Exonération résidence principale',
-    tauxTpi: isResidencePrincipale ? 0 : 0.20,
-    montantTpi: isResidencePrincipale ? 0 : plusValue * 0.20,
-    montantDeductible: 0,
-    netVendeur: prixVente - (isResidencePrincipale ? 0 : plusValue * 0.20),
-    cotisationMinimale: 0,
-  };
-
-  // Scénario C : Déduction travaux
-  const montantDeductibleTravaux = Math.min(travaux, plusValue * 0.5);
-  const plusValueApresTravaux = plusValue - montantDeductibleTravaux;
-  const tpiApresTravaux = plusValueApresTravaux * 0.20;
-  const cotisationMinimale = Math.max(tpiApresTravaux, prixVente * 0.03); // 3% minimum
-
-  const scenarioC: TpiScenario = {
-    name: 'Scénario C',
-    description: 'Déduction travaux',
-    tauxTpi: 0.20,
-    montantTpi: tpiApresTravaux,
-    montantDeductible: montantDeductibleTravaux,
-    netVendeur: prixVente - cotisationMinimale,
+    name: 'Standard',
+    description: 'TPI sur profit net (20%) + minimum 3% du prix de cession',
+    tauxTpi,
+    montantTpi: Math.max(tpiStandard, cotisationMinimale),
+    montantDeductible: fraisAcquisitionForfait,
+    netVendeur: prixVente - Math.max(tpiStandard, cotisationMinimale),
     cotisationMinimale,
   };
 
-  // Déterminer le scénario optimal
+  const eligibleResidence = Boolean(isResidencePrincipale) && held >= 6;
+  const scenarioB: TpiScenario = {
+    name: 'Résidence principale',
+    description: eligibleResidence ? 'Exonération (hypothèse: occupation >= 6 ans)' : 'Non applicable (hypothèse: occupation < 6 ans)',
+    tauxTpi: eligibleResidence ? 0 : tauxTpi,
+    montantTpi: eligibleResidence ? 0 : Math.max(tpiStandard, cotisationMinimale),
+    montantDeductible: fraisAcquisitionForfait,
+    netVendeur: prixVente - (eligibleResidence ? 0 : Math.max(tpiStandard, cotisationMinimale)),
+    cotisationMinimale,
+  };
+
+  const scenarioC: TpiScenario = {
+    name: 'Avec travaux',
+    description: 'TPI avec ajout des travaux justifiables au coût de revient + minimum 3% du prix de cession',
+    tauxTpi,
+    montantTpi: Math.max(tpiTravaux, cotisationMinimale),
+    montantDeductible: fraisAcquisitionForfait + Math.max(0, travaux),
+    netVendeur: prixVente - Math.max(tpiTravaux, cotisationMinimale),
+    cotisationMinimale,
+  };
+
   const scenarios = [scenarioA, scenarioB, scenarioC];
-  const scenarioOptimal = scenarios.reduce((best, current) =>
-    current.netVendeur > best.netVendeur ? current : best
-  );
+  const scenarioOptimal = scenarios.reduce((best, current) => (current.netVendeur > best.netVendeur ? current : best));
 
   const economieMax = scenarioA.montantTpi - scenarioOptimal.montantTpi;
 
@@ -372,6 +527,16 @@ export function formatCurrency(value: number): string {
 
 export function formatPercent(value: number, decimals = 1): string {
   return `${(value * 100).toFixed(decimals)}%`;
+}
+
+export function estimateLocalTaxesAnnual(args: { price: number; city?: string }): number {
+  const price = Math.max(0, args.price);
+  const cityCoef = args.city === "casa" ? 1.15 : args.city === "rabat" ? 1.1 : 1;
+  const basePct = 0.003;
+  const min = 1200;
+  const max = 30000;
+  const raw = price * basePct * cityCoef;
+  return Math.round(Math.max(min, Math.min(max, raw)));
 }
 
 export function calculateInvestmentScore(

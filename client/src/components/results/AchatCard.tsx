@@ -80,7 +80,7 @@ export default function AchatCard({ data = {} }: AchatCardProps) {
           className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800"
         >
           <p className="text-xs font-medium text-red-700 dark:text-red-300">
-            ⚠️ Quitus fiscal obligatoire
+            Quitus fiscal obligatoire
           </p>
         </motion.div>
       )}

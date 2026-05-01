@@ -59,7 +59,7 @@ export function useChat(): UseChatReturn {
         );
         setCurrentNode(res.currentNode);
       } catch (err) {
-        setError('Erreur lors du démarrage de la démo');
+        setError('Erreur lors du démarrage de la simulation');
         console.error(err);
       }
     },

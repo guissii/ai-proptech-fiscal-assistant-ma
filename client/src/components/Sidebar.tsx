@@ -163,8 +163,8 @@ export default function Sidebar() {
             D
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-foreground truncate">Mode démo</p>
-            <p className="text-xs text-muted-foreground truncate">Sans compte / sans auth</p>
+            <p className="text-sm font-medium text-foreground truncate">Session anonyme</p>
+            <p className="text-xs text-muted-foreground truncate">Simulation guidée</p>
           </div>
         </div>
       </div>

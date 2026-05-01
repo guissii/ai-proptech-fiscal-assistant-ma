@@ -1,7 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { useCity } from '@/contexts/CityContext';
 import { QUARTIERS } from '@/data/quartiers';
-import { calculateIRRevenusFonciers, calculateLocationRevenue, formatCurrency, formatPercent } from '@/lib/fiscalEngine';
+import { calculateIRRevenusFonciers, formatCurrency, formatPercent } from '@/lib/fiscalEngine';
 import { motion } from 'framer-motion';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -13,41 +13,14 @@ export default function LocationCard({ data = {} }: LocationCardProps) {
   const { activeCity } = useCity();
 
   const input = (data?.input ?? {}) as Record<string, unknown>;
-  const initialBudget = typeof input.price === 'number' ? input.price : 1000000;
-  const initialRent = typeof input.monthlyRent === 'number' ? input.monthlyRent : 5000;
+  const budget = typeof input.price === 'number' ? input.price : 0;
+  const monthlyRent = typeof input.monthlyRent === 'number' ? input.monthlyRent : 0;
+  const vacancyRate = typeof input.vacancyRate === 'number' ? input.vacancyRate : 0;
+  const managementFeePct = typeof input.managementFeePct === 'number' ? input.managementFeePct : 0;
+  const investorType = typeof input.investorType === 'string' ? input.investorType : 'individual';
+  const salaried = typeof input.salaried === 'string' ? input.salaried : undefined;
 
-  const [budget, setBudget] = useState(() => Math.max(100000, initialBudget));
-  const [monthlyRent, setMonthlyRent] = useState(() => Math.max(0, initialRent));
-  const [useCredit, setUseCredit] = useState(false);
-
-  const results = useMemo(() => {
-    return calculateLocationRevenue({
-      prixAcquisition: budget,
-      loyer: monthlyRent,
-      dureeDetention: 10,
-      typeImmobilier: 'non-meuble',
-      depensesAnnuelles: 0,
-    });
-  }, [budget, monthlyRent]);
-
-  const creditMonthlyPayment = useMemo(() => {
-    if (!useCredit) return 0;
-    const downPaymentRate = 0.2;
-    const annualRate = 0.045;
-    const years = 20;
-    const principal = Math.max(0, budget * (1 - downPaymentRate));
-    const r = annualRate / 12;
-    const n = years * 12;
-    if (principal <= 0) return 0;
-    if (r <= 0) return principal / n;
-    const factor = Math.pow(1 + r, n);
-    return (principal * r * factor) / (factor - 1);
-  }, [budget, useCredit]);
-
-  const cashflowNetMonthly = useMemo(() => {
-    const netMonthly = results.revenuNet / 12;
-    return netMonthly - creditMonthlyPayment;
-  }, [creditMonthlyPayment, results.revenuNet]);
+  const results = data as any;
 
   const quartierData = useMemo(() => {
     const clamp = (x: number, min: number, max: number) => Math.max(min, Math.min(max, x));
@@ -72,87 +45,52 @@ export default function LocationCard({ data = {} }: LocationCardProps) {
   }, [activeCity, budget]);
 
   const metrics = useMemo(() => {
+    const taxLabel =
+      investorType === 'company' ? 'Impôt (IS estimé)' : 'Impôt (IR revenus locatifs)';
+    const extra =
+      investorType !== 'company' && salaried === 'yes' && typeof results.irIncremental === 'number' && results.irIncremental > 0
+        ? [{ label: 'Scénario salarié (IR progressif)', value: results.irIncremental, unit: 'DH' }]
+        : [];
     return [
-      { label: 'Loyer mensuel', value: monthlyRent, unit: 'DH' },
-      { label: 'Revenu brut annuel', value: results.revenuBrut, unit: 'DH' },
-      { label: 'Base imposable', value: results.baseImposable, unit: 'DH' },
-      { label: 'IR annuel', value: results.irAnnuel, unit: 'DH' },
-      { label: 'Revenu net annuel', value: results.revenuNet, unit: 'DH' },
-      { label: 'Rendement net', value: results.rendementNet, unit: '%' },
-      ...(useCredit
+      { label: 'Revenu brut annuel (effectif)', value: results.revenuBrutEffectif ?? results.revenuBrut, unit: 'DH' },
+      { label: 'Charges non fiscales', value: results.chargesNonFiscales ?? 0, unit: 'DH' },
+      { label: 'Base imposable', value: results.baseImposable ?? 0, unit: 'DH' },
+      { label: taxLabel, value: results.irAnnuel ?? 0, unit: 'DH' },
+      { label: 'Revenu net annuel', value: results.revenuNet ?? 0, unit: 'DH' },
+      { label: 'Rendement net', value: results.rendementNet ?? 0, unit: '%' },
+      ...extra,
+      ...(results.mensualiteCredit
         ? [
-            { label: 'Mensualité crédit', value: creditMonthlyPayment, unit: 'DH' },
-            { label: 'Cashflow net/mois', value: cashflowNetMonthly, unit: 'DH' },
+            { label: 'Mensualité crédit', value: results.mensualiteCredit, unit: 'DH' },
+            { label: 'Cashflow net/mois', value: results.cashflowNetMensuel ?? 0, unit: 'DH' },
           ]
         : []),
     ];
-  }, [cashflowNetMonthly, creditMonthlyPayment, monthlyRent, results, useCredit]);
+  }, [investorType, results, salaried]);
 
   return (
     <div className="space-y-6">
-      {/* Sélecteur budget */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <label className="text-xs font-semibold text-foreground">Budget d'investissement</label>
-          <span className="text-sm font-semibold text-primary">{formatCurrency(budget)}</span>
-        </div>
-        <input
-          type="range"
-          min="100000"
-          max="5000000"
-          step="25000"
-          value={budget}
-          onChange={(e) => setBudget(Number(e.target.value))}
-          className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer"
-        />
-        <div className="flex justify-between text-xs text-muted-foreground">
-          <span>100k DH</span>
-          <span>5M DH</span>
+      <div className="rounded-lg border border-border bg-muted/30 p-4">
+        <div className="text-xs font-semibold text-foreground">Lecture rapide</div>
+        <div className="text-xs text-muted-foreground mt-1">
+          Brut effectif (loyer − vacance) → charges (copro/entretien/assurance/taxes/gestion) → base imposable → impôt → net.
         </div>
       </div>
-
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <label className="text-xs font-semibold text-foreground">Loyer mensuel</label>
-          <span className="text-sm font-semibold text-primary">{formatCurrency(monthlyRent)}</span>
+      <div className="rounded-lg border border-border bg-muted/30 p-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <div className="text-xs text-muted-foreground">Loyer (mensuel)</div>
+            <div className="text-sm font-semibold text-foreground">{formatCurrency(monthlyRent)}</div>
+          </div>
+          <div>
+            <div className="text-xs text-muted-foreground">Vacance</div>
+            <div className="text-sm font-semibold text-foreground">{formatPercent(vacancyRate / 100, 0)}</div>
+          </div>
+          <div>
+            <div className="text-xs text-muted-foreground">Gestion</div>
+            <div className="text-sm font-semibold text-foreground">{formatPercent(managementFeePct / 100, 1)}</div>
+          </div>
         </div>
-        <input
-          type="range"
-          min="500"
-          max="50000"
-          step="100"
-          value={monthlyRent}
-          onChange={(e) => setMonthlyRent(Number(e.target.value))}
-          className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer"
-        />
-        <div className="flex justify-between text-xs text-muted-foreground">
-          <span>500 DH</span>
-          <span>50k DH</span>
-        </div>
-      </div>
-
-      {/* Toggle Cash vs Crédit */}
-      <div className="flex gap-2">
-        <button
-          onClick={() => setUseCredit(false)}
-          className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
-            !useCredit
-              ? 'bg-primary text-primary-foreground'
-              : 'bg-muted text-muted-foreground hover:bg-muted/80'
-          }`}
-        >
-          💰 Cash
-        </button>
-        <button
-          onClick={() => setUseCredit(true)}
-          className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
-            useCredit
-              ? 'bg-primary text-primary-foreground'
-              : 'bg-muted text-muted-foreground hover:bg-muted/80'
-          }`}
-        >
-          🏦 Crédit (4.5%)
-        </button>
       </div>
 
       {/* Métriques */}
@@ -173,6 +111,22 @@ export default function LocationCard({ data = {} }: LocationCardProps) {
             </p>
           </motion.div>
         ))}
+      </div>
+
+      <div className="bg-muted/30 rounded-lg p-3 space-y-2">
+        <h4 className="text-xs font-semibold text-foreground">Détail (annuel)</h4>
+        <div className="space-y-1 text-xs text-muted-foreground">
+          <p>• Brut (théorique) : {formatCurrency(results.revenuBrut ?? 0)}</p>
+          <p>• Brut (effectif) : {formatCurrency(results.revenuBrutEffectif ?? results.revenuBrut ?? 0)}</p>
+          <p>• Frais de gestion : {formatCurrency(results.fraisGestion ?? 0)}</p>
+          <p>• Charges non fiscales : {formatCurrency(results.chargesNonFiscales ?? 0)}</p>
+          <p>• Base imposable : {formatCurrency(results.baseImposable ?? 0)}</p>
+          <p>• {investorType === 'company' ? 'IS (estimé)' : 'IR (revenus locatifs)'} : {formatCurrency(results.irAnnuel ?? 0)}</p>
+          {investorType !== 'company' && salaried === 'yes' && typeof results.irIncremental === 'number' && results.irIncremental > 0 ? (
+            <p>• Scénario salarié (IR progressif) : {formatCurrency(results.irIncremental)}</p>
+          ) : null}
+          {results.mensualiteCredit ? <p>• Mensualité crédit : {formatCurrency(results.mensualiteCredit)}</p> : null}
+        </div>
       </div>
 
       {/* Classement quartiers */}

@@ -1,10 +1,12 @@
 import React, { useMemo, useRef, useEffect, useState } from 'react';
 import { useCity } from '@/contexts/CityContext';
 import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
 import { Send } from 'lucide-react';
 import MessageBubble from './MessageBubble';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { DemoNode } from '@shared/demoFlow';
+import { DEMO_NODE_ORDER } from '@shared/demoFlow';
 
 interface ChatAreaProps {
   messages: Array<{
@@ -15,10 +17,11 @@ interface ChatAreaProps {
   }>;
   currentNode: DemoNode | null;
   isLoading: boolean;
+  error?: string | null;
   onAnswer: (nodeId: string, value: string | number) => Promise<void>;
 }
 
-export default function ChatArea({ messages, currentNode, isLoading, onAnswer }: ChatAreaProps) {
+export default function ChatArea({ messages, currentNode, isLoading, error, onAnswer }: ChatAreaProps) {
   const { activeCity, language, getCityColor, getCityLabel } = useCity();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [numberInput, setNumberInput] = useState<string>('');
@@ -35,6 +38,15 @@ export default function ChatArea({ messages, currentNode, isLoading, onAnswer }:
   };
 
   const canAnswer = Boolean(currentNode) && !isLoading;
+
+  const stepInfo = useMemo(() => {
+    if (!currentNode) return null;
+    const idx = DEMO_NODE_ORDER.indexOf(currentNode.id);
+    const step = idx >= 0 ? idx + 1 : undefined;
+    const total = DEMO_NODE_ORDER.length;
+    const progress = step ? Math.round((step / total) * 100) : 0;
+    return { step, total, progress };
+  }, [currentNode]);
 
   const actionArea = useMemo(() => {
     if (!currentNode) return null;
@@ -59,9 +71,25 @@ export default function ChatArea({ messages, currentNode, isLoading, onAnswer }:
 
     if (currentNode.type === 'number') {
       const unit = currentNode.number.unit ? ` (${currentNode.number.unit})` : '';
+      const min = typeof currentNode.number.min === 'number' ? currentNode.number.min : undefined;
+      const max = typeof currentNode.number.max === 'number' ? currentNode.number.max : undefined;
+      const isPercent = currentNode.number.unit === '%';
       return (
-        <div className="flex gap-3 items-center">
-          <div className="flex-1">
+        <div className="flex flex-col gap-3">
+          {isPercent && typeof min === 'number' && typeof max === 'number' && (
+            <input
+              type="range"
+              min={min}
+              max={max}
+              step={currentNode.number.step ?? 1}
+              value={numberInput.trim() === '' ? min : Number(numberInput)}
+              onChange={(e) => setNumberInput(String(e.target.value))}
+              disabled={!canAnswer}
+              className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer"
+            />
+          )}
+          <div className="flex gap-3 items-center">
+            <div className="flex-1">
             <Input
               value={numberInput}
               onChange={e => setNumberInput(e.target.value)}
@@ -84,6 +112,7 @@ export default function ChatArea({ messages, currentNode, isLoading, onAnswer }:
           >
             <Send className="w-4 h-4" />
           </motion.button>
+          </div>
         </div>
       );
     }
@@ -96,7 +125,14 @@ export default function ChatArea({ messages, currentNode, isLoading, onAnswer }:
       {/* Header */}
       <div className="px-6 py-4 border-b border-border flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h2 className="text-lg font-semibold text-foreground">Chat</h2>
+          <div className="min-w-0">
+            <h2 className="text-lg font-semibold text-foreground truncate">Assistant</h2>
+            {stepInfo?.step && (
+              <p className="text-xs text-muted-foreground">
+                Étape {stepInfo.step} / {stepInfo.total}
+              </p>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             <span
               className="px-2 py-1 rounded-full text-xs font-medium text-white"
@@ -108,6 +144,9 @@ export default function ChatArea({ messages, currentNode, isLoading, onAnswer }:
               {language.toUpperCase()}
             </span>
           </div>
+        </div>
+        <div className="w-40">
+          <Progress value={stepInfo?.progress ?? 0} />
         </div>
       </div>
 
@@ -127,11 +166,16 @@ export default function ChatArea({ messages, currentNode, isLoading, onAnswer }:
                 className="w-16 h-16 rounded-full flex items-center justify-center mb-4"
                 style={{ backgroundColor: getCityColor(activeCity) + '20' }}
               >
-                <span className="text-3xl">💬</span>
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-semibold"
+                  style={{ backgroundColor: getCityColor(activeCity) }}
+                >
+                  A
+                </div>
               </div>
               <h3 className="text-lg font-semibold text-foreground mb-2">Bienvenue sur Aqar.ma</h3>
               <p className="text-sm text-muted-foreground max-w-sm">
-                Sélectionnez la ville et la langue, puis répondez aux questions guidées.
+                Sélectionnez la ville et la langue, puis répondez aux questions pour obtenir une estimation détaillée.
               </p>
             </motion.div>
           ) : (
@@ -158,7 +202,7 @@ export default function ChatArea({ messages, currentNode, isLoading, onAnswer }:
             >
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-                  <span className="text-sm">🤖</span>
+                  <span className="text-xs font-semibold text-muted-foreground">AI</span>
                 </div>
                 <div className="flex gap-1">
                   {[0, 1, 2].map(i => (
@@ -178,7 +222,14 @@ export default function ChatArea({ messages, currentNode, isLoading, onAnswer }:
 
       {/* Action area */}
       <div className="px-6 py-4 border-t border-border bg-background">
-        {actionArea}
+        <div className="space-y-2">
+          {error && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              {error}
+            </div>
+          )}
+          {actionArea}
+        </div>
       </div>
     </div>
   );

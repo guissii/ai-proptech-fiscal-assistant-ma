@@ -13,41 +13,11 @@ export default function TpiCard({ data = {} }: TpiCardProps) {
   const asNumber = (v: unknown, fallback = 0) =>
     typeof v === 'number' && Number.isFinite(v) ? v : fallback;
 
-  const fallbackScenarios = [
-    {
-      name: 'Scénario A',
-      description: 'TPI standard 20%',
-      tauxTpi: 0.2,
-      montantTpi: 200000,
-      montantDeductible: 0,
-      netVendeur: 800000,
-      cotisationMinimale: 0,
-    },
-    {
-      name: 'Scénario B',
-      description: 'Exonération résidence principale',
-      tauxTpi: 0,
-      montantTpi: 0,
-      montantDeductible: 0,
-      netVendeur: 1000000,
-      cotisationMinimale: 0,
-    },
-    {
-      name: 'Scénario C',
-      description: 'Déduction travaux',
-      tauxTpi: 0.2,
-      montantTpi: 120000,
-      montantDeductible: 400000,
-      netVendeur: 880000,
-      cotisationMinimale: 30000,
-    },
-  ];
-
   const scenariosRaw = (data as any).scenarios;
-  const scenarios =
-    Array.isArray(scenariosRaw) && scenariosRaw.length > 0
-      ? scenariosRaw
-      : fallbackScenarios;
+  const scenarios = Array.isArray(scenariosRaw) ? scenariosRaw : [];
+  if (scenarios.length === 0) {
+    return <p className="text-sm text-muted-foreground">Non renseigné.</p>;
+  }
 
   const comparisonData = scenarios.map((s, idx) => ({
     name: `Scén. ${String.fromCharCode(65 + idx)}`,
@@ -130,7 +100,7 @@ export default function TpiCard({ data = {} }: TpiCardProps) {
                 className="px-3 py-2 rounded-lg bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800"
               >
                 <p className="text-xs font-medium text-yellow-700 dark:text-yellow-300">
-                  ⚠️ Cotisation minimale 3% : {formatCurrency(selectedData.cotisationMinimale)}
+                  Cotisation minimale 3% : {formatCurrency(selectedData.cotisationMinimale)}
                 </p>
               </motion.div>
             )}
@@ -197,7 +167,7 @@ export default function TpiCard({ data = {} }: TpiCardProps) {
         className="px-3 py-2 rounded-lg bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800"
       >
         <p className="text-xs font-medium text-green-700 dark:text-green-300">
-          ✓ Économie maximale : {formatCurrency(economieMax)}
+          Économie maximale : {formatCurrency(economieMax)}
         </p>
       </motion.div>
     </div>

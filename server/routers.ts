@@ -392,7 +392,7 @@ function resolveDemoNode(city: "fes" | "rabat" | "casa", nodeId: string): DemoNo
   const options = getQuartiersByCity(city).map(q => ({
     label: q.name,
     value: q.id,
-    next: "q.rent",
+    next: "q.financing",
   }));
 
   return {

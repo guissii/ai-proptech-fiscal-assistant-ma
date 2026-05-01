@@ -7,7 +7,7 @@ import { useLocation } from 'wouter';
 
 export default function Dashboard() {
   const { activeCity, language } = useCity();
-  const { messages, isLoading, conversationId, currentNode, start, answer } = useChat();
+  const { messages, isLoading, error, currentNode, start, answer } = useChat();
   const [, setLocation] = useLocation();
 
   const lastStartedRef = useRef<string>('');
@@ -50,6 +50,7 @@ export default function Dashboard() {
             messages={messages}
             currentNode={currentNode}
             isLoading={isLoading}
+            error={error}
             onAnswer={async (nodeId, value) => {
               const res = await answer(nodeId, value);
               if (res.action?.type === 'go_results') {
@@ -58,7 +59,7 @@ export default function Dashboard() {
                   language,
                   ...res.action.inputData,
                 };
-                localStorage.setItem('aqar.demo.resultsInput', JSON.stringify(payload));
+                localStorage.setItem('aqar.simulation.resultsInput', JSON.stringify(payload));
                 setLocation('/results');
               }
             }}
