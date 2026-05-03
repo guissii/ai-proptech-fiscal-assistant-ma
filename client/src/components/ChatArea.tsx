@@ -6,7 +6,7 @@ import { Send } from 'lucide-react';
 import MessageBubble from './MessageBubble';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { DemoNode } from '@shared/demoFlow';
-import { DEMO_NODE_ORDER } from '@shared/demoFlow';
+import { getDemoStepInfo } from '@shared/demoFlow';
 
 interface ChatAreaProps {
   messages: Array<{
@@ -41,11 +41,10 @@ export default function ChatArea({ messages, currentNode, isLoading, error, onAn
 
   const stepInfo = useMemo(() => {
     if (!currentNode) return null;
-    const idx = DEMO_NODE_ORDER.indexOf(currentNode.id);
-    const step = idx >= 0 ? idx + 1 : undefined;
-    const total = DEMO_NODE_ORDER.length;
-    const progress = step ? Math.round((step / total) * 100) : 0;
-    return { step, total, progress };
+    const info = getDemoStepInfo(currentNode.id);
+    if (!info) return null;
+    const progress = Math.round((info.step / info.total) * 100);
+    return { ...info, progress };
   }, [currentNode]);
 
   const actionArea = useMemo(() => {
@@ -74,6 +73,15 @@ export default function ChatArea({ messages, currentNode, isLoading, error, onAn
       const min = typeof currentNode.number.min === 'number' ? currentNode.number.min : undefined;
       const max = typeof currentNode.number.max === 'number' ? currentNode.number.max : undefined;
       const isPercent = currentNode.number.unit === '%';
+      const suggested = typeof currentNode.number.suggested === 'number' ? currentNode.number.suggested : undefined;
+      const sliderValue =
+        numberInput.trim() === ''
+          ? typeof suggested === 'number'
+            ? suggested
+            : typeof min === 'number'
+              ? min
+              : 0
+          : Number(numberInput);
       return (
         <div className="flex flex-col gap-3">
           {isPercent && typeof min === 'number' && typeof max === 'number' && (
@@ -82,11 +90,28 @@ export default function ChatArea({ messages, currentNode, isLoading, error, onAn
               min={min}
               max={max}
               step={currentNode.number.step ?? 1}
-              value={numberInput.trim() === '' ? min : Number(numberInput)}
+              value={sliderValue}
               onChange={(e) => setNumberInput(String(e.target.value))}
               disabled={!canAnswer}
               className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer"
             />
+          )}
+          {typeof suggested === 'number' && (
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-xs text-muted-foreground">
+                Valeur suggérée : <span className="font-semibold text-foreground">{suggested}{currentNode.number.unit ? ` ${currentNode.number.unit}` : ''}</span>
+              </div>
+              <motion.button
+                type="button"
+                onClick={() => setNumberInput(String(suggested))}
+                disabled={!canAnswer}
+                className="px-3 py-1.5 rounded-lg bg-muted text-foreground text-xs font-medium hover:bg-muted/80 disabled:opacity-50 disabled:cursor-not-allowed"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                Utiliser
+              </motion.button>
+            </div>
           )}
           <div className="flex gap-3 items-center">
             <div className="flex-1">
@@ -129,7 +154,7 @@ export default function ChatArea({ messages, currentNode, isLoading, error, onAn
             <h2 className="text-lg font-semibold text-foreground truncate">Assistant</h2>
             {stepInfo?.step && (
               <p className="text-xs text-muted-foreground">
-                Étape {stepInfo.step} / {stepInfo.total}
+                Étape {stepInfo.step}/{stepInfo.total} — {stepInfo.title}
               </p>
             )}
           </div>

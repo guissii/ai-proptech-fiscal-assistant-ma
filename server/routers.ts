@@ -174,7 +174,7 @@ Sois concis, professionnel et utile.`;
           startNodeId: DEMO_START_NODE_ID,
         });
 
-        const firstNode = resolveDemoNode(conversation.city, conversation.currentNodeId);
+        const firstNode = resolveDemoNode(conversation.city, conversation.currentNodeId, conversation.answers);
         if (!firstNode) {
           throw new Error("Demo flow misconfigured: start node missing");
         }
@@ -211,26 +211,52 @@ Sois concis, professionnel et utile.`;
           throw new Error("Étape invalide (node mismatch)");
         }
 
-        const node = resolveDemoNode(conversation.city, conversation.currentNodeId);
+        const node = resolveDemoNode(conversation.city, conversation.currentNodeId, conversation.answers);
         if (!node) {
           throw new Error("Node introuvable");
         }
 
         const applyTransition = async (nextNodeId: string, userDisplay: string, storedValue: string | number) => {
           const updated = await demoUpdateConversation(input.conversationId, c => {
+            const edit = c.editContext ?? null;
             let next = c;
             next = demoAddMessage(next, "user", userDisplay);
+
+            let nextEdit = edit;
+            let effectiveNextNodeId = nextNodeId;
+
+            if (c.currentNodeId === "q.editWhich") {
+              nextEdit = {
+                returnToNodeId: "q.review",
+                targetNodeId: nextNodeId,
+                stopNodeId: nextNodeId,
+              };
+            } else if (nextEdit) {
+              if (c.currentNodeId === nextEdit.targetNodeId) {
+                const stop = computeEditStopNodeId({ targetNodeId: nextEdit.targetNodeId, value: storedValue });
+                if (stop) {
+                  nextEdit = { ...nextEdit, stopNodeId: stop };
+                }
+              }
+
+              if (c.currentNodeId === nextEdit.stopNodeId) {
+                effectiveNextNodeId = nextEdit.returnToNodeId;
+                nextEdit = null;
+              }
+            }
+
             next = {
               ...next,
               answers: {
                 ...next.answers,
                 [c.currentNodeId]: storedValue,
               },
-              currentNodeId: nextNodeId,
+              currentNodeId: effectiveNextNodeId,
+              editContext: nextEdit,
               updatedAt: Date.now(),
             };
 
-            const nextNode = resolveDemoNode(c.city, nextNodeId);
+            const nextNode = resolveDemoNode(c.city, next.currentNodeId, next.answers);
             if (!nextNode) {
               return next;
             }
@@ -239,7 +265,7 @@ Sois concis, professionnel et utile.`;
             return next;
           });
 
-          const currentNode = resolveDemoNode(conversation.city, nextNodeId);
+          const currentNode = resolveDemoNode(conversation.city, updated?.currentNodeId ?? nextNodeId, updated?.answers ?? {});
           if (!currentNode) {
             throw new Error("Node suivant introuvable");
           }
@@ -383,10 +409,20 @@ function buildSimulationAction(node: DemoNode & { type: "done" }, answers: Recor
   } as const;
 }
 
-function resolveDemoNode(city: "fes" | "rabat" | "casa", nodeId: string): DemoNode | undefined {
+function resolveDemoNode(
+  city: "fes" | "rabat" | "casa",
+  nodeId: string,
+  answers: Record<string, string | number> = {}
+): DemoNode | undefined {
   const base = getDemoNode(nodeId);
   if (!base) return undefined;
   if (base.type !== "choice") return base;
+  if (base.id === "q.review") {
+    return {
+      ...base,
+      prompt: buildReviewPrompt(city, answers),
+    };
+  }
   if (base.id !== "q.quartier") return base;
 
   const options = getQuartiersByCity(city).map(q => ({
@@ -399,6 +435,116 @@ function resolveDemoNode(city: "fes" | "rabat" | "casa", nodeId: string): DemoNo
     ...base,
     options,
   };
+}
+
+function computeEditStopNodeId(args: { targetNodeId: string; value: string | number }): string | null {
+  const v = typeof args.value === "string" ? args.value : String(args.value);
+  if (args.targetNodeId === "q.salarie") {
+    return v === "yes" ? "q.salaryMonthly" : "q.salarie";
+  }
+  if (args.targetNodeId === "q.financing") {
+    return v === "credit" ? "q.interestRate" : "q.financing";
+  }
+  if (args.targetNodeId === "q.wantAirbnb") {
+    return v === "yes" ? "q.airbnbExpensesAnnual" : "q.wantAirbnb";
+  }
+  if (args.targetNodeId === "q.sell") {
+    return v === "yes" ? "q.isPrimaryResidence" : "q.sell";
+  }
+  if (args.targetNodeId === "q.propertyType") {
+    return "q.quartier";
+  }
+  return null;
+}
+
+function buildReviewPrompt(city: "fes" | "rabat" | "casa", answers: Record<string, string | number>): string {
+  const get = (id: string) => answers[id];
+  const asStr = (x: unknown) => (typeof x === "string" ? x : typeof x === "number" ? String(x) : "");
+  const asNum = (x: unknown) => (typeof x === "number" && Number.isFinite(x) ? x : undefined);
+  const formatDh = (x: unknown) => {
+    const n = asNum(x);
+    if (typeof n !== "number") return "—";
+    return new Intl.NumberFormat("fr-MA", { style: "currency", currency: "MAD", maximumFractionDigits: 0 }).format(n);
+  };
+  const formatPct = (x: unknown) => {
+    const n = asNum(x);
+    if (typeof n !== "number") return "—";
+    return `${n.toFixed(n % 1 === 0 ? 0 : 1)}%`;
+  };
+
+  const quartierId = asStr(get("q.quartier"));
+  const quartier =
+    quartierId ? getQuartiersByCity(city).find(q => q.id === quartierId)?.name ?? quartierId : "";
+
+  const salaried = asStr(get("q.salarie"));
+  const financing = asStr(get("q.financing"));
+  const wantAirbnb = asStr(get("q.wantAirbnb"));
+  const sell = asStr(get("q.sell"));
+
+  const lines: string[] = [];
+  lines.push("Récapitulatif des informations saisies :");
+  lines.push("");
+  lines.push("**Profil investisseur**");
+  lines.push(`- Année fiscale : ${asStr(get("q.taxYear")) || "—"}`);
+  lines.push(`- Salarié : ${salaried === "yes" ? "Oui" : salaried === "no" ? "Non" : "—"}`);
+  if (salaried === "yes") {
+    lines.push(`- Salaire net mensuel : ${formatDh(get("q.salaryMonthly"))}/mois`);
+  }
+  const investorType = asStr(get("q.investorType"));
+  lines.push(`- Investisseur : ${investorType === "company" ? "Société / agence" : "Personne physique"}`);
+  lines.push("");
+
+  lines.push("**Bien immobilier**");
+  lines.push(`- Prix : ${formatDh(get("q.price"))}`);
+  lines.push(`- Surface : ${asNum(get("q.surface")) ?? "—"} m²`);
+  const propertyType = asStr(get("q.propertyType"));
+  lines.push(`- Type : ${propertyType === "neuf" ? "Neuf" : propertyType === "terrain" ? "Terrain" : "Ancien"}`);
+  lines.push(`- Quartier : ${quartier || "—"}`);
+  lines.push("");
+
+  lines.push("**Financement**");
+  lines.push(`- Mode : ${financing === "credit" ? "Crédit immobilier" : financing === "cash" ? "Cash" : "—"}`);
+  if (financing === "credit") {
+    lines.push(`- Apport : ${formatDh(get("q.downPayment"))}`);
+    lines.push(`- Durée crédit : ${asNum(get("q.loanYears")) ?? "—"} ans`);
+    lines.push(`- Taux d’intérêt : ${formatPct(get("q.interestRate"))}`);
+  }
+  lines.push("");
+
+  lines.push("**Location longue durée**");
+  lines.push(`- Loyer mensuel : ${formatDh(get("q.rent"))}/mois`);
+  lines.push(`- Vacance : ${formatPct(get("q.vacancyRate"))} (valeur suggérée : 8%)`);
+  lines.push(`- Gestion/agence : ${formatPct(get("q.managementFeePct"))} (valeur suggérée : 0%)`);
+  lines.push(`- Charges annuelles : ${formatDh(get("q.operatingExpensesAnnual"))}/an`);
+  lines.push(`- Assurance : ${formatDh(get("q.insuranceAnnual"))}/an`);
+  lines.push("- Taxes locales : estimées automatiquement (non demandées)");
+  lines.push("");
+
+  lines.push("**Airbnb (optionnel)**");
+  lines.push(`- Activé : ${wantAirbnb === "yes" ? "Oui" : wantAirbnb === "no" ? "Non" : "—"}`);
+  if (wantAirbnb === "yes") {
+    lines.push(`- Tarif/nuit : ${formatDh(get("q.airbnbNightly"))}`);
+    lines.push(`- Occupation : ${formatPct(get("q.airbnbOccupancy"))}`);
+    lines.push(`- Commission : ${formatPct(get("q.airbnbCommissionPct"))} (valeur suggérée : 15%)`);
+    lines.push(`- Taxe de séjour : ${formatPct(get("q.airbnbTouristTaxPct"))}`);
+    lines.push(`- Dépenses annuelles : ${formatDh(get("q.airbnbExpensesAnnual"))}/an`);
+  }
+  lines.push("");
+
+  lines.push("**Revente / TPI (optionnel)**");
+  lines.push(`- Activé : ${sell === "yes" ? "Oui" : sell === "no" ? "Non" : "—"}`);
+  if (sell === "yes") {
+    lines.push(`- Durée de détention : ${asNum(get("q.yearsHeld")) ?? "—"} ans`);
+    lines.push(`- Prix de vente : ${formatDh(get("q.salePrice"))}`);
+    lines.push(`- Travaux justifiables : ${formatDh(get("q.works"))}`);
+    const isPrimary = asStr(get("q.isPrimaryResidence"));
+    lines.push(`- Résidence principale : ${isPrimary === "yes" ? "Oui" : isPrimary === "no" ? "Non" : "—"}`);
+  }
+
+  lines.push("");
+  lines.push("Confirmez-vous ces informations ?");
+
+  return lines.join("\n");
 }
 
 // Utilitaires

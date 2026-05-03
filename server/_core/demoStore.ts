@@ -16,6 +16,11 @@ export type DemoConversation = {
   language: "fr" | "ar" | "en";
   currentNodeId: string;
   answers: Record<string, string | number>;
+  editContext?: {
+    returnToNodeId: string;
+    targetNodeId: string;
+    stopNodeId: string;
+  } | null;
   messages: DemoMessage[];
   createdAt: number;
   updatedAt: number;
@@ -86,6 +91,7 @@ export async function demoCreateConversation(input: {
       language: input.language,
       currentNodeId: input.startNodeId,
       answers: {},
+      editContext: null,
       messages: [],
       createdAt: now,
       updatedAt: now,
@@ -136,4 +142,3 @@ export function demoAddMessage(
     updatedAt: now,
   };
 }
-

@@ -15,6 +15,7 @@ export type DemoNumberSpec = {
   step?: number;
   unit?: string;
   placeholder?: string;
+  suggested?: number;
   next: string;
 };
 
@@ -49,9 +50,9 @@ export const DEMO_NODES: Record<string, DemoNode> = {
     type: "choice",
     prompt: "Quelle année fiscale souhaitez-vous utiliser pour l’estimation ?",
     options: [
-      { label: "2026 (référence)", value: "2026", next: "q.salarie" },
-      { label: "2025", value: "2025", next: "q.salarie" },
       { label: "2024", value: "2024", next: "q.salarie" },
+      { label: "2025", value: "2025", next: "q.salarie" },
+      { label: "2026", value: "2026", next: "q.salarie" },
     ],
   },
 
@@ -201,7 +202,8 @@ export const DEMO_NODES: Record<string, DemoNode> = {
       max: 50,
       step: 1,
       unit: "%",
-      placeholder: "Ex: 5",
+      suggested: 8,
+      placeholder: "Ex: 8",
       next: "q.managementFeePct",
     },
   },
@@ -214,7 +216,8 @@ export const DEMO_NODES: Record<string, DemoNode> = {
       max: 30,
       step: 0.5,
       unit: "%",
-      placeholder: "Ex: 8",
+      suggested: 0,
+      placeholder: "Ex: 0",
       next: "q.operatingExpensesAnnual",
     },
   },
@@ -247,7 +250,7 @@ export const DEMO_NODES: Record<string, DemoNode> = {
   "q.wantAirbnb": {
     id: "q.wantAirbnb",
     type: "choice",
-    prompt: "Souhaitez-vous aussi estimer la location courte durée (Airbnb) ?",
+    prompt: "Souhaitez-vous estimer la location courte durée (Airbnb) ? (optionnel)",
     options: [
       { label: "Oui", value: "yes", next: "q.airbnbNightly" },
       { label: "Non", value: "no", next: "q.sell" },
@@ -288,7 +291,8 @@ export const DEMO_NODES: Record<string, DemoNode> = {
       max: 25,
       step: 0.5,
       unit: "%",
-      placeholder: "Ex: 3",
+      suggested: 15,
+      placeholder: "Ex: 15",
       next: "q.airbnbTouristTaxPct",
     },
   },
@@ -321,10 +325,10 @@ export const DEMO_NODES: Record<string, DemoNode> = {
   "q.sell": {
     id: "q.sell",
     type: "choice",
-    prompt: "Voulez-vous estimer aussi la revente (TPI) ?",
+    prompt: "Souhaitez-vous estimer la revente et la TPI ? (optionnel)",
     options: [
       { label: "Oui", value: "yes", next: "q.yearsHeld" },
-      { label: "Non", value: "no", next: "q.done" },
+      { label: "Non", value: "no", next: "q.review" },
     ],
   },
   "q.yearsHeld": {
@@ -371,8 +375,40 @@ export const DEMO_NODES: Record<string, DemoNode> = {
     type: "choice",
     prompt: "Ce bien est-il votre résidence principale ?",
     options: [
-      { label: "Oui", value: "yes", next: "q.done" },
-      { label: "Non", value: "no", next: "q.done" },
+      { label: "Oui", value: "yes", next: "q.review" },
+      { label: "Non", value: "no", next: "q.review" },
+    ],
+  },
+  "q.review": {
+    id: "q.review",
+    type: "choice",
+    prompt: "Récapitulatif",
+    options: [
+      { label: "Confirmer", value: "confirm", next: "q.done" },
+      { label: "Corriger", value: "edit", next: "q.editWhich" },
+    ],
+  },
+  "q.editWhich": {
+    id: "q.editWhich",
+    type: "choice",
+    prompt: "Quelle information souhaitez-vous corriger ?",
+    options: [
+      { label: "Année fiscale", value: "q.taxYear", next: "q.taxYear" },
+      { label: "Statut salarié", value: "q.salarie", next: "q.salarie" },
+      { label: "Salaire", value: "q.salaryMonthly", next: "q.salaryMonthly" },
+      { label: "Type investisseur", value: "q.investorType", next: "q.investorType" },
+      { label: "Prix du bien", value: "q.price", next: "q.price" },
+      { label: "Surface", value: "q.surface", next: "q.surface" },
+      { label: "Type de bien", value: "q.propertyType", next: "q.propertyType" },
+      { label: "Quartier", value: "q.quartier", next: "q.quartier" },
+      { label: "Financement", value: "q.financing", next: "q.financing" },
+      { label: "Loyer", value: "q.rent", next: "q.rent" },
+      { label: "Vacance", value: "q.vacancyRate", next: "q.vacancyRate" },
+      { label: "Gestion", value: "q.managementFeePct", next: "q.managementFeePct" },
+      { label: "Charges annuelles", value: "q.operatingExpensesAnnual", next: "q.operatingExpensesAnnual" },
+      { label: "Assurance", value: "q.insuranceAnnual", next: "q.insuranceAnnual" },
+      { label: "Airbnb (oui/non)", value: "q.wantAirbnb", next: "q.wantAirbnb" },
+      { label: "Revente (oui/non)", value: "q.sell", next: "q.sell" },
     ],
   },
   "q.done": {
@@ -444,8 +480,57 @@ export const DEMO_NODE_ORDER: string[] = [
   "q.salePrice",
   "q.works",
   "q.isPrimaryResidence",
+  "q.review",
+  "q.editWhich",
   "q.done",
 ];
+
+export const DEMO_BLOCK_TOTAL = 6 as const;
+
+export const DEMO_NODE_BLOCK: Record<string, { step: number; title: string }> = {
+  "q.taxYear": { step: 1, title: "Profil investisseur" },
+  "q.salarie": { step: 1, title: "Profil investisseur" },
+  "q.salaryMonthly": { step: 1, title: "Profil investisseur" },
+  "q.investorType": { step: 1, title: "Profil investisseur" },
+
+  "q.price": { step: 2, title: "Bien immobilier" },
+  "q.surface": { step: 2, title: "Bien immobilier" },
+  "q.propertyType": { step: 2, title: "Bien immobilier" },
+  "q.quartier": { step: 2, title: "Bien immobilier" },
+
+  "q.financing": { step: 3, title: "Financement" },
+  "q.downPayment": { step: 3, title: "Financement" },
+  "q.loanYears": { step: 3, title: "Financement" },
+  "q.interestRate": { step: 3, title: "Financement" },
+
+  "q.rent": { step: 4, title: "Location longue durée" },
+  "q.vacancyRate": { step: 4, title: "Location longue durée" },
+  "q.managementFeePct": { step: 4, title: "Location longue durée" },
+  "q.operatingExpensesAnnual": { step: 4, title: "Location longue durée" },
+  "q.insuranceAnnual": { step: 4, title: "Location longue durée" },
+
+  "q.wantAirbnb": { step: 5, title: "Airbnb (optionnel)" },
+  "q.airbnbNightly": { step: 5, title: "Airbnb (optionnel)" },
+  "q.airbnbOccupancy": { step: 5, title: "Airbnb (optionnel)" },
+  "q.airbnbCommissionPct": { step: 5, title: "Airbnb (optionnel)" },
+  "q.airbnbTouristTaxPct": { step: 5, title: "Airbnb (optionnel)" },
+  "q.airbnbExpensesAnnual": { step: 5, title: "Airbnb (optionnel)" },
+
+  "q.sell": { step: 6, title: "Revente / TPI (optionnel)" },
+  "q.yearsHeld": { step: 6, title: "Revente / TPI (optionnel)" },
+  "q.salePrice": { step: 6, title: "Revente / TPI (optionnel)" },
+  "q.works": { step: 6, title: "Revente / TPI (optionnel)" },
+  "q.isPrimaryResidence": { step: 6, title: "Revente / TPI (optionnel)" },
+  "q.review": { step: 6, title: "Récapitulatif" },
+  "q.editWhich": { step: 6, title: "Récapitulatif" },
+  "q.done": { step: 6, title: "Résultats" },
+};
+
+export function getDemoStepInfo(nodeId: string): { step: number; total: number; title: string } | null {
+  const info = DEMO_NODE_BLOCK[nodeId];
+  if (!info) return null;
+  return { step: info.step, total: DEMO_BLOCK_TOTAL, title: info.title };
+}
 
 export function getDemoNode(nodeId: string): DemoNode | undefined {
   return DEMO_NODES[nodeId];
