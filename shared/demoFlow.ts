@@ -195,7 +195,7 @@ export const DEMO_NODES: Record<string, DemoNode> = {
   "q.vacancyRate": {
     id: "q.vacancyRate",
     type: "number",
-    prompt: "Taux de vacance estimé (%) ?",
+    prompt: "Taux de vacance (périodes non louées) (%) ?",
     number: {
       min: 0,
       max: 50,
@@ -295,7 +295,7 @@ export const DEMO_NODES: Record<string, DemoNode> = {
   "q.airbnbTouristTaxPct": {
     id: "q.airbnbTouristTaxPct",
     type: "number",
-    prompt: "Taxes/séjour estimées (%) ?",
+    prompt: "Taxe de séjour (Airbnb) (%) ?",
     number: {
       min: 0,
       max: 15,
@@ -330,7 +330,7 @@ export const DEMO_NODES: Record<string, DemoNode> = {
   "q.yearsHeld": {
     id: "q.yearsHeld",
     type: "number",
-    prompt: "Durée de détention (années) ?",
+    prompt: "Durée de détention (achat → revente) (années) ?",
     number: {
       min: 1,
       max: 40,
@@ -356,7 +356,7 @@ export const DEMO_NODES: Record<string, DemoNode> = {
   "q.works": {
     id: "q.works",
     type: "number",
-    prompt: "Travaux / investissements justifiables (DH) ?",
+    prompt: "Travaux justifiables (factures) (DH) ?",
     number: {
       min: 0,
       max: 50000000,
