@@ -28,12 +28,12 @@ export default function Dashboard() {
   }, [activeCity, language, start]);
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-[100dvh] bg-background">
       {/* Sidebar */}
       <Sidebar />
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         {/* Header */}
         <div className="px-8 py-6 border-b border-border bg-muted/30">
           <h1 style={{ fontFamily: "'Playfair Display', serif" }} className="text-3xl font-bold text-foreground mb-2">
@@ -45,7 +45,7 @@ export default function Dashboard() {
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 min-h-0 overflow-hidden flex">
           <ChatArea
             messages={messages}
             currentNode={currentNode}

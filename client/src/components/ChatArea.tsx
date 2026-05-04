@@ -26,12 +26,19 @@ export default function ChatArea({ messages, currentNode, isLoading, error, onAn
   const scrollRef = useRef<HTMLDivElement>(null);
   const [numberInput, setNumberInput] = useState<string>('');
 
-  // Auto-scroll vers le dernier message
-  useEffect(() => {
-    if (scrollRef.current) {
+  const scrollToBottom = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+    requestAnimationFrame(() => {
+      if (!scrollRef.current) return;
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages]);
+    });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, currentNode?.id, isLoading]);
 
   const getTimeString = (date: Date) => {
     return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
@@ -82,6 +89,12 @@ export default function ChatArea({ messages, currentNode, isLoading, error, onAn
               ? min
               : 0
           : Number(numberInput);
+      const submit = async () => {
+        const value = numberInput.trim();
+        if (!value) return;
+        setNumberInput('');
+        await onAnswer(currentNode.id, value);
+      };
       return (
         <div className="flex flex-col gap-3">
           {isPercent && typeof min === 'number' && typeof max === 'number' && (
@@ -118,18 +131,19 @@ export default function ChatArea({ messages, currentNode, isLoading, error, onAn
             <Input
               value={numberInput}
               onChange={e => setNumberInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void submit();
+                }
+              }}
               placeholder={`${currentNode.number.placeholder ?? 'Entrez une valeur'}${unit}`}
               disabled={!canAnswer}
               inputMode="numeric"
             />
           </div>
           <motion.button
-            onClick={async () => {
-              const value = numberInput.trim();
-              if (!value) return;
-              setNumberInput('');
-              await onAnswer(currentNode.id, value);
-            }}
+            onClick={submit}
             disabled={!canAnswer || numberInput.trim().length === 0}
             className="px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity h-9"
             whileHover={{ scale: 1.03 }}
@@ -146,7 +160,7 @@ export default function ChatArea({ messages, currentNode, isLoading, error, onAn
   }, [canAnswer, currentNode, numberInput, onAnswer]);
 
   return (
-    <div className="flex-1 flex flex-col bg-background">
+    <div className="flex-1 h-full min-h-0 grid grid-rows-[auto,1fr,auto] bg-background">
       {/* Header */}
       <div className="px-6 py-4 border-b border-border flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -178,7 +192,7 @@ export default function ChatArea({ messages, currentNode, isLoading, error, onAn
       {/* Messages area */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto px-6 py-4 space-y-4"
+        className="min-h-0 overflow-y-auto px-6 py-4 space-y-4"
       >
         <AnimatePresence>
           {messages.length === 0 ? (

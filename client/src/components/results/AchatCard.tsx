@@ -19,22 +19,23 @@ export default function AchatCard({ data = {} }: AchatCardProps) {
   const coutTotal = asNumber(data.coutTotal);
   const economieExoneration = asNumber(data.economieExoneration);
   const quitusFiscalObligatoire = Boolean(data.quitusFiscalObligatoire);
+  const totalFrais = droitsEnregistrement + honorairesNotaire + fraisConservation;
 
   const metrics = [
     {
-      label: 'Prix net acquéreur',
+      label: 'Prix du bien',
       value: prixNet,
       unit: 'DH',
     },
     {
-      label: 'Frais d\'entrée',
-      value: prixNet > 0 ? (fraisEntree / prixNet) * 100 : 0,
-      unit: '%',
+      label: "Frais d'entrée",
+      value: fraisEntree,
+      unit: 'DH',
     },
     {
-      label: 'Économie exon. TH',
-      value: economieExoneration,
-      unit: 'DH',
+      label: "Frais d'entrée (% du prix)",
+      value: prixNet > 0 ? (fraisEntree / prixNet) * 100 : 0,
+      unit: '%',
     },
     {
       label: 'Coût total acquisition',
@@ -44,11 +45,10 @@ export default function AchatCard({ data = {} }: AchatCardProps) {
   ];
 
   const fraisData = [
-    { name: 'Prix', value: prixNet, color: '#1B4F8A' },
     { name: 'Droits', value: droitsEnregistrement, color: '#C4532A' },
     { name: 'Honoraires', value: honorairesNotaire, color: '#6B3FA0' },
     { name: 'Conservation', value: fraisConservation, color: '#F59E0B' },
-  ];
+  ].filter(x => x.value > 0);
 
   return (
     <div className="space-y-6">
@@ -90,6 +90,9 @@ export default function AchatCard({ data = {} }: AchatCardProps) {
         <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide">
           Répartition des frais
         </h4>
+        <div className="text-xs text-muted-foreground">
+          Frais d’entrée = droits d’enregistrement + honoraires notaire + conservation foncière.
+        </div>
         <ResponsiveContainer width="100%" height={200}>
           <PieChart>
             <Pie
@@ -106,7 +109,11 @@ export default function AchatCard({ data = {} }: AchatCardProps) {
               ))}
             </Pie>
             <Tooltip
-              formatter={(value) => formatCurrency(value as number)}
+              formatter={(value, name) => {
+                const v = typeof value === 'number' ? value : 0;
+                const pct = totalFrais > 0 ? v / totalFrais : 0;
+                return [`${formatCurrency(v)} (${formatPercent(pct, 1)})`, String(name)];
+              }}
               contentStyle={{
                 backgroundColor: 'var(--background)',
                 border: '1px solid var(--border)',
@@ -118,21 +125,54 @@ export default function AchatCard({ data = {} }: AchatCardProps) {
               wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }}
               formatter={(value, entry) => {
                 const item = fraisData.find(d => d.name === value);
-                return item ? `${value}: ${formatCurrency(item.value)}` : value;
+                if (!item) return value;
+                const pct = totalFrais > 0 ? item.value / totalFrais : 0;
+                return `${value}: ${formatCurrency(item.value)} (${formatPercent(pct, 1)})`;
               }}
             />
           </PieChart>
         </ResponsiveContainer>
+        <div className="bg-muted/30 rounded-lg p-3">
+          <div className="text-xs font-semibold text-foreground mb-2">Détail des frais</div>
+          <div className="space-y-1 text-xs text-muted-foreground">
+            {[
+              { label: 'Droits d’enregistrement', value: droitsEnregistrement },
+              { label: 'Honoraires notaire', value: honorairesNotaire },
+              { label: 'Conservation foncière', value: fraisConservation },
+            ]
+              .filter(x => x.value > 0)
+              .map((item) => {
+                const pctFees = totalFrais > 0 ? item.value / totalFrais : 0;
+                const pctPrice = prixNet > 0 ? item.value / prixNet : 0;
+                return (
+                  <div key={item.label} className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 truncate">{item.label}</div>
+                    <div className="shrink-0 text-right text-foreground font-medium">
+                      {formatCurrency(item.value)} · {formatPercent(pctFees, 1)} des frais · {formatPercent(pctPrice, 1)} du prix
+                    </div>
+                  </div>
+                );
+              })}
+            <div className="pt-2 border-t border-border flex items-center justify-between gap-3">
+              <div className="text-foreground font-semibold">Total frais d’entrée</div>
+              <div className="text-foreground font-semibold">
+                {formatCurrency(totalFrais)} · {formatPercent(prixNet > 0 ? totalFrais / prixNet : 0, 1)} du prix
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Détails calcul */}
       <div className="bg-muted/30 rounded-lg p-3 space-y-2">
         <h4 className="text-xs font-semibold text-foreground">Détails du calcul</h4>
         <div className="space-y-1 text-xs text-muted-foreground">
-          <p>• Prix d'acquisition : {formatCurrency(prixNet)}</p>
-          <p>• Droits d'enregistrement : {formatCurrency(droitsEnregistrement)}</p>
+          <p>• Prix du bien : {formatCurrency(prixNet)}</p>
+          <p>• Droits d’enregistrement : {formatCurrency(droitsEnregistrement)}</p>
           <p>• Honoraires notaire : {formatCurrency(honorairesNotaire)}</p>
-          <p>• Frais de conservation : {formatCurrency(fraisConservation)}</p>
+          <p>• Conservation foncière : {formatCurrency(fraisConservation)}</p>
+          <p>• Total frais d’entrée : {formatCurrency(totalFrais)}</p>
+          {economieExoneration > 0 ? <p>• Économie exonération (droits 6%) : {formatCurrency(economieExoneration)}</p> : null}
           <p className="pt-2 border-t border-border font-semibold text-foreground">
             Coût total : {formatCurrency(coutTotal)}
           </p>

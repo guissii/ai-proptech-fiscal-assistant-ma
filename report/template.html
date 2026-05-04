@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>{{ meta.type_rapport }} — Rapport</title>
+  </head>
+  <body>
+    <div class="page">
+      <div class="cover">
+        <div class="cover-top">
+          {% if assets.logo_data_uri %}
+            <img class="logo" src="{{ assets.logo_data_uri }}" alt="Logo" />
+          {% endif %}
+        </div>
+        <div class="cover-title">Rapport {{ meta.type_rapport }}</div>
+        <div class="cover-subtitle">
+          {{ inputs.ville }}{% if inputs.quartier and inputs.quartier != "— Non disponible —" %} • {{ inputs.quartier }}{% endif %}
+          • {{ inputs.annee_fiscale }}
+        </div>
+        <div class="cover-meta">Généré le {{ meta.date_generation }}</div>
+        <div class="cover-warning">
+          Ce document est une estimation pédagogique. Les chiffres peuvent varier selon le dossier, les preuves, et la réglementation. Consultez un expert avant toute décision.
+        </div>
+      </div>
+    </div>
+
+    <div class="page">
+      <div class="h1">Profil de l’investisseur</div>
+      <div class="divider"></div>
+      <div class="section">
+        <div class="section-title">Vos paramètres</div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-label">Prix du bien</div>
+            <div class="card-value">{{ inputs.prix }}</div>
+            <div class="card-explain">C’est le montant de base, avant frais et impôts.</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Surface</div>
+            <div class="card-value">{{ inputs.surface }}</div>
+            <div class="card-explain">La surface impacte la valeur et le loyer potentiel.</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Quartier</div>
+            <div class="card-value" style="font-size:18px">{{ inputs.quartier }}</div>
+            <div class="card-explain">Le quartier change fortement le loyer, la vacance et la revente.</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Financement</div>
+            <div class="card-value" style="font-size:18px">{{ inputs.financement }}</div>
+            <div class="card-explain">
+              {% if inputs.financement == "Cash" %}
+                Vous achetez sans emprunt bancaire. Pas de mensualités liées à ce projet.
+              {% elif inputs.financement == "Crédit" %}
+                Vous achetez avec un crédit. Les mensualités peuvent réduire votre cashflow.
+              {% else %}
+                Le mode de financement influence la pression mensuelle.
+              {% endif %}
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-label">Statut salarié</div>
+            <div class="card-value" style="font-size:18px">{{ inputs.statut_salarie }}</div>
+            <div class="card-explain">Si vous êtes salarié, l’impôt peut être progressif selon vos revenus.</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Salaire net mensuel</div>
+            <div class="card-value">{{ inputs.salaire_net_mensuel }}</div>
+            <div class="card-explain">Utilisé pour estimer l’impact fiscal additionnel.</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Loyer visé</div>
+            <div class="card-value">{{ inputs.loyer_mensuel }}</div>
+            <div class="card-explain">Le loyer est le “moteur” de vos revenus locatifs.</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Vacance / Gestion</div>
+            <div class="card-value" style="font-size:18px">{{ inputs.vacance_pct }} • {{ inputs.gestion_pct }}</div>
+            <div class="card-explain">Vacance = mois sans locataire. Gestion = coût d’une agence.</div>
+          </div>
+        </div>
+      </div>
+      <div class="footer">
+        <div>Aqar.ma — Rapport pédagogique</div>
+        <div>{{ meta.date_generation }}</div>
+      </div>
+    </div>
+
+    <div class="page">
+      <div class="h1">Frais d’achat</div>
+      <div class="divider"></div>
+      <div class="info-box">
+        Quand vous achetez un bien, vous payez presque toujours plus que le prix affiché. Ces frais servent à enregistrer l’achat, payer les formalités et sécuriser juridiquement la transaction.
+      </div>
+      <div class="section">
+        <div class="section-title">Détail des frais</div>
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Poste</th>
+              <th class="right">Montant</th>
+              <th>Explication simple</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Droits d’enregistrement</td>
+              <td class="right">{{ results.droits_enregistrement }}</td>
+              <td class="muted">Taxe liée à l’enregistrement officiel de l’acte de vente.</td>
+            </tr>
+            <tr>
+              <td>Honoraires notaire</td>
+              <td class="right">{{ results.honoraires_notaire }}</td>
+              <td class="muted">Rémunération pour la rédaction, vérification et sécurisation des documents.</td>
+            </tr>
+            <tr>
+              <td>Conservation foncière</td>
+              <td class="right">{{ results.conservation_fonciere }}</td>
+              <td class="muted">Frais administratifs pour l’inscription et la conservation du titre.</td>
+            </tr>
+            {% if achat.optional_fees_enabled %}
+              {% if achat.frais_agence and achat.frais_agence != "— Non disponible —" %}
+                <tr>
+                  <td>Frais d’agence (optionnel)</td>
+                  <td class="right">{{ achat.frais_agence }}</td>
+                  <td class="muted">Si vous passez par une agence immobilière, ces frais peuvent s’ajouter.</td>
+                </tr>
+              {% endif %}
+              {% if achat.frais_dossier and achat.frais_dossier != "— Non disponible —" %}
+                <tr>
+                  <td>Frais de dossier (optionnel)</td>
+                  <td class="right">{{ achat.frais_dossier }}</td>
+                  <td class="muted">Certains dossiers impliquent des frais administratifs supplémentaires.</td>
+                </tr>
+              {% endif %}
+              {% if achat.timbre and achat.timbre != "— Non disponible —" %}
+                <tr>
+                  <td>Timbre / formalités (optionnel)</td>
+                  <td class="right">{{ achat.timbre }}</td>
+                  <td class="muted">Petits frais liés aux documents et formalités.</td>
+                </tr>
+              {% endif %}
+              {% if achat.frais_credit and achat.frais_credit != "— Non disponible —" %}
+                <tr>
+                  <td>Frais liés au crédit (optionnel)</td>
+                  <td class="right">{{ achat.frais_credit }}</td>
+                  <td class="muted">Exemples : dossier bancaire, assurance emprunteur, garanties.</td>
+                </tr>
+              {% endif %}
+            {% endif %}
+            <tr class="total-row">
+              <td>Total frais d’entrée</td>
+              <td class="right">{{ results.frais_entree }}</td>
+              <td>À prévoir en plus du prix d’achat</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="warning-box section">
+        <div style="font-weight:700;color:var(--warning);margin-bottom:4px">À retenir</div>
+        Le coût total réel de l’achat est {{ results.cout_total }}. {{ explain.frais_entree }}
+      </div>
+      <div class="footer">
+        <div>Aqar.ma — Frais d’achat</div>
+        <div>{{ meta.date_generation }}</div>
+      </div>
+    </div>
+
+    <div class="page">
+      <div class="h1">Revenus locatifs</div>
+      <div class="divider"></div>
+      <div class="section">
+        <div class="section-title">Le chemin de l’argent</div>
+        <div class="flow">
+          <div class="flow-step">
+            <div class="flow-label">Loyer brut annuel</div>
+            <div class="flow-value">{{ results.brut_annuel }}</div>
+            <div class="muted">Loyer mensuel × 12.</div>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step">
+            <div class="flow-label">Brut effectif</div>
+            <div class="flow-value">{{ results.brut_effectif }}</div>
+            <div class="muted">Après vacance (mois non loués).</div>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step">
+            <div class="flow-label">Base imposable</div>
+            <div class="flow-value">{{ results.base_imposable }}</div>
+            <div class="muted">Après abattement fiscal.</div>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step">
+            <div class="flow-label">Impôt annuel</div>
+            <div class="flow-value value-danger">{{ results.impot_annuel }}</div>
+            <div class="muted">Ce que vous payez à l’État.</div>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step">
+            <div class="flow-label">Net annuel</div>
+            <div class="flow-value value-accent">{{ results.net_annuel }}</div>
+            <div class="muted">Ce qu’il reste après tout.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Ce qui est retiré (et pourquoi)</div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-label">Vacance (perte de loyers)</div>
+            <div class="card-value value-warning">{{ results.vacance_montant }}</div>
+            <div class="card-explain">Ce sont les loyers “non touchés” quand le bien n’est pas loué.</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Charges non fiscales</div>
+            <div class="card-value value-danger">{{ results.charges_non_fiscales }}</div>
+            <div class="card-explain">Dépenses réelles pour faire tourner le bien (copro, entretien, assurance, gestion, taxes locales…).</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Part non imposée (abattement)</div>
+            <div class="card-value">{{ fiscalite.abattement_montant }}</div>
+            <div class="card-explain">Bonne nouvelle : cette part est considérée comme “frais” et n’est pas taxée.</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Impôt annuel</div>
+            <div class="card-value value-danger">{{ results.impot_annuel }}</div>
+            <div class="card-explain">C’est la part qui revient à l’État, calculée sur la base imposable.</div>
+          </div>
+        </div>
+        <div class="info-box section">
+          <strong>En clair :</strong> on part du loyer brut, on enlève la vacance et les charges (ce que vous payez vraiment), puis on calcule l’impôt sur une base réduite grâce à l’abattement. Le reste correspond au net.
+        </div>
+      </div>
+
+      {% if charges.breakdown_enabled %}
+        <div class="section">
+          <div class="section-title">Détail des charges (si renseigné)</div>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Poste</th>
+                <th class="right">Montant annuel</th>
+                <th>Explication simple</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% if charges.depenses_exploitation and charges.depenses_exploitation != "— Non disponible —" %}
+                <tr>
+                  <td>Dépenses d’exploitation</td>
+                  <td class="right">{{ charges.depenses_exploitation }}</td>
+                  <td class="muted">Copro, entretien, réparations : c’est le “coût de fonctionnement” du bien.</td>
+                </tr>
+              {% endif %}
+              {% if charges.frais_gestion and charges.frais_gestion != "— Non disponible —" %}
+                <tr>
+                  <td>Frais de gestion</td>
+                  <td class="right">{{ charges.frais_gestion }}</td>
+                  <td class="muted">Gestion par agence (recherche locataire, quittances, suivi).</td>
+                </tr>
+              {% endif %}
+              {% if charges.assurance and charges.assurance != "— Non disponible —" %}
+                <tr>
+                  <td>Assurance</td>
+                  <td class="right">{{ charges.assurance }}</td>
+                  <td class="muted">Protection contre certains risques (dégâts, responsabilité…).</td>
+                </tr>
+              {% endif %}
+              {% if charges.taxes_locales and charges.taxes_locales != "— Non disponible —" %}
+                <tr>
+                  <td>Taxes locales</td>
+                  <td class="right">{{ charges.taxes_locales }}</td>
+                  <td class="muted">Taxes liées à la détention/occupation du bien, selon la commune.</td>
+                </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      {% endif %}
+
+      <div class="success-box section">
+        <div class="section-title" style="margin:0 0 8px 0">Chiffres clés</div>
+        <div class="grid-2">
+          <div class="card" style="box-shadow:none">
+            <div class="card-label">Net annuel</div>
+            <div class="card-value value-accent">{{ results.net_annuel }}</div>
+            <div class="card-explain">C’est l’argent “dans votre poche” sur une année.</div>
+          </div>
+          <div class="card" style="box-shadow:none">
+            <div class="card-label">Cashflow net / mois</div>
+            <div class="card-value value-accent">{{ results.cashflow_net_mois }}</div>
+            <div class="card-explain">{{ explain.cashflow }}</div>
+          </div>
+          <div class="card" style="box-shadow:none">
+            <div class="card-label">Rendement net</div>
+            <div class="card-value value-accent">{{ results.rendement_net_pct }}</div>
+            <div class="card-explain">{{ explain.rendement }}</div>
+          </div>
+          <div class="card" style="box-shadow:none">
+            <div class="card-label">Base imposable</div>
+            <div class="card-value">{{ results.base_imposable }}</div>
+            <div class="card-explain">C’est le montant qui sert de base au calcul de l’impôt.</div>
+          </div>
+        </div>
+      </div>
+      <div class="footer">
+        <div>Aqar.ma — Revenus locatifs</div>
+        <div>{{ meta.date_generation }}</div>
+      </div>
+    </div>
+
+    {% if taxes_locales.enabled %}
+      <div class="page">
+        <div class="h1">Taxes locales annuelles</div>
+        <div class="divider"></div>
+        <div class="info-box">
+          Les taxes locales dépendent de la commune et du type d’occupation du bien. Dans la pratique, certaines taxes peuvent être à la charge de l’occupant (vous ou le locataire) selon le contrat et la réglementation.
+        </div>
+        <div class="section">
+          <div class="section-title">Hypothèse d’occupation</div>
+          <div class="card">
+            <div class="card-label">Type d’occupation</div>
+            <div class="card-value" style="font-size:18px">{{ taxes_locales.type_occupation }}</div>
+            <div class="card-explain">On distingue un bien occupé (résidence) d’un bien loué car les taxes peuvent changer.</div>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-title">Estimation (si disponible)</div>
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-label">Taxes locales (total)</div>
+              <div class="card-value">{{ taxes_locales.taxes_locales_annuelles }}</div>
+              <div class="card-explain">Estimation globale si le détail n’est pas renseigné.</div>
+            </div>
+            <div class="card">
+              <div class="card-label">Taxe de services communaux</div>
+              <div class="card-value">{{ taxes_locales.taxe_services_communaux_annuelle }}</div>
+              <div class="card-explain">Taxe communale liée aux services locaux (voirie, éclairage…).</div>
+            </div>
+            <div class="card">
+              <div class="card-label">Taxe d’habitation</div>
+              <div class="card-value">{{ taxes_locales.taxe_habitation_annuelle }}</div>
+              <div class="card-explain">Peut dépendre de l’occupation (résidence vs loué) et de la commune.</div>
+            </div>
+            <div class="card">
+              <div class="card-label">Pourquoi on l’affiche</div>
+              <div class="card-value" style="font-size:18px">Transparence</div>
+              <div class="card-explain">Pour que vous voyiez clairement quels impôts annuels “reviennent” chaque année pour ce bien.</div>
+            </div>
+          </div>
+        </div>
+        <div class="warning-box section">
+          <div style="font-weight:700;color:var(--warning);margin-bottom:4px">Important</div>
+          Les taxes locales varient fortement. Le rapport est une estimation : confirmez avec un professionnel ou la commune.
+        </div>
+        <div class="footer">
+          <div>Aqar.ma — Taxes locales</div>
+          <div>{{ meta.date_generation }}</div>
+        </div>
+      </div>
+    {% endif %}
+
+    {% if fiscalite.enabled %}
+      <div class="page">
+        <div class="h1">Fiscalité</div>
+        <div class="divider"></div>
+
+        <div class="info-box">
+          Sur vos loyers, l’État applique un abattement de {{ fiscalite.abattement_pct }}. Cela signifie qu’une partie est considérée comme “frais d’entretien” et n’est pas imposée.
+        </div>
+        <div class="muted" style="margin-top:6px">{{ fiscalite.impot_locatif_explain }}</div>
+
+        <div class="section">
+          <div class="section-title">Barème IR (simplifié)</div>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Tranche</th>
+                <th class="right">Taux</th>
+                <th class="right">Déduction</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in fiscalite.brackets %}
+                <tr {% if loop.index0 == fiscalite.bracket_index %}style="background:#edf6ff"{% endif %}>
+                  <td><strong>{{ row.label }}</strong></td>
+                  <td class="right">{{ row.rate }}</td>
+                  <td class="right">{{ row.deduction }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          <div class="muted" style="margin-top:6px">
+            La tranche surlignée correspond à votre niveau de revenu estimé, et sert à expliquer l’idée d’impôt progressif.
+          </div>
+        </div>
+
+        {% if fiscalite.avec_sans_enabled %}
+          <div class="section">
+            <div class="section-title">Comparaison “Sans ce bien” vs “Avec ce bien”</div>
+            <div class="grid-2">
+              <div class="card">
+                <div class="card-label">Revenus sans ce bien</div>
+                <div class="card-value">{{ fiscalite.total_income_without }}</div>
+                <div class="card-explain">Salaire + autres revenus (sans le revenu locatif de ce projet).</div>
+              </div>
+              <div class="card">
+                <div class="card-label">Revenus avec ce bien</div>
+                <div class="card-value">{{ fiscalite.total_income_with }}</div>
+                <div class="card-explain">On ajoute la base imposable du bien à vos revenus actuels.</div>
+              </div>
+              <div class="card">
+                <div class="card-label">IR estimé sans ce bien</div>
+                <div class="card-value value-danger">{{ fiscalite.ir_without }}</div>
+                <div class="card-explain">Impôt estimé sur vos revenus actuels.</div>
+              </div>
+              <div class="card">
+                <div class="card-label">IR estimé avec ce bien</div>
+                <div class="card-value value-danger">{{ fiscalite.ir_with }}</div>
+                <div class="card-explain">Impôt estimé après ajout du revenu locatif imposable.</div>
+              </div>
+              <div class="card" style="grid-column:1/-1">
+                <div class="card-label">Impact fiscal additionnel</div>
+                <div class="card-value value-warning">{{ fiscalite.ir_incremental }}</div>
+                <div class="card-explain">Différence entre “avec” et “sans”. Cela aide à estimer l’effort fiscal réel.</div>
+              </div>
+            </div>
+          </div>
+        {% endif %}
+
+        <div class="footer">
+          <div>Aqar.ma — Fiscalité</div>
+          <div>{{ meta.date_generation }}</div>
+        </div>
+      </div>
+    {% endif %}
+
+    {% if airbnb.enabled %}
+      <div class="page">
+        <div class="h1">Comparaison des stratégies</div>
+        <div class="divider"></div>
+        <div class="section">
+          <div class="section-title">Location longue durée vs Airbnb</div>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Stratégie</th>
+                <th class="right">Impôt annuel</th>
+                <th class="right">Net annuel</th>
+                <th class="right">Rendement net</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <strong>Location longue durée</strong>
+                  {% if comparaison.best_strategy == "Location longue durée" %}
+                    <span class="badge badge-recommended">Recommandé</span>
+                  {% endif %}
+                </td>
+                <td class="right">{{ results.impot_annuel }}</td>
+                <td class="right">{{ results.net_annuel }}</td>
+                <td class="right">{{ results.rendement_net_pct }}</td>
+              </tr>
+              <tr>
+                <td>
+                  <strong>Airbnb</strong>
+                  {% if comparaison.best_strategy == "Airbnb" %}
+                    <span class="badge badge-recommended">Recommandé</span>
+                  {% endif %}
+                </td>
+                <td class="right">{{ airbnb.impot_annuel }}</td>
+                <td class="right">{{ airbnb.net_annuel }}</td>
+                <td class="right">—</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="info-box section">
+          La location longue durée est souvent plus stable. Airbnb peut rapporter plus, mais dépend fortement de l’occupation, des frais de gestion, et de la réglementation locale.
+        </div>
+        <div class="footer">
+          <div>Aqar.ma — Stratégies</div>
+          <div>{{ meta.date_generation }}</div>
+        </div>
+      </div>
+    {% endif %}
+
+    {% if quartiers.enabled %}
+      <div class="page">
+        <div class="h1">Comparaison par quartier</div>
+        <div class="divider"></div>
+        <div class="section">
+          <div class="section-title">Rendement net (estimations)</div>
+          <div class="bar-chart">
+            {% set max_yield = 0 %}
+            {% for it in quartiers.rows %}
+              {% if it.rendement is not none and it.rendement > max_yield %}
+                {% set max_yield = it.rendement %}
+              {% endif %}
+            {% endfor %}
+            {% for it in quartiers.rows %}
+              <div class="bar-row">
+                <div class="bar-label">{{ it.nom }}</div>
+                <div class="bar-track">
+                  {% if it.rendement is not none and max_yield > 0 %}
+                    <div class="bar-fill" style="width:{{ (it.rendement / max_yield * 100) | round(0) }}%"></div>
+                  {% else %}
+                    <div class="bar-fill" style="width:0%"></div>
+                  {% endif %}
+                </div>
+                <div class="bar-value">
+                  {% if it.rendement is not none %}
+                    {{ (it.rendement) | round(1) }}%
+                  {% else %}
+                    —
+                  {% endif %}
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+          <div class="muted" style="margin-top:8px">
+            Les rendements par quartier sont des estimations comparatives basées sur des médianes. Un bien réel peut s’écarter fortement selon l’état, l’étage, l’exposition, etc.
+          </div>
+        </div>
+        <div class="footer">
+          <div>Aqar.ma — Quartiers</div>
+          <div>{{ meta.date_generation }}</div>
+        </div>
+      </div>
+    {% endif %}
+
+    <div class="page">
+      <div class="h1">Résumé & avertissements</div>
+      <div class="divider"></div>
+
+      <div class="section">
+        <div class="section-title">Les 5 points clés</div>
+        <div class="bullets">
+          <div class="bullet">
+            <div class="dot">✓</div>
+            <div>
+              <div><strong>Coût total d’achat</strong> : {{ results.cout_total }}</div>
+              <div class="muted">À prévoir en plus du prix du bien.</div>
+            </div>
+          </div>
+          <div class="bullet">
+            <div class="dot">✓</div>
+            <div>
+              <div><strong>Net annuel estimé</strong> : {{ results.net_annuel }}</div>
+              <div class="muted">Ce qu’il reste après charges et impôts.</div>
+            </div>
+          </div>
+          <div class="bullet">
+            <div class="dot">✓</div>
+            <div>
+              <div><strong>Cashflow mensuel</strong> : {{ results.cashflow_net_mois }}</div>
+              <div class="muted">{{ explain.cashflow }}</div>
+            </div>
+          </div>
+          <div class="bullet">
+            <div class="dot">✓</div>
+            <div>
+              <div><strong>Rendement net</strong> : {{ results.rendement_net_pct }}</div>
+              <div class="muted">{{ explain.rendement }}</div>
+            </div>
+          </div>
+          <div class="bullet">
+            <div class="dot">✓</div>
+            <div>
+              <div><strong>Impôt annuel</strong> : {{ results.impot_annuel }}</div>
+              <div class="muted">L’impôt dépend des règles et de votre situation.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Limites de cette simulation</div>
+        <div class="card">
+          <div class="muted">
+            Ce rapport utilise des hypothèses et un calcul simplifié. Les charges réelles, les déductions, et les règles fiscales peuvent changer. Les données de marché (loyers, vacance) sont indicatives.
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="warning-box">
+          <div style="font-weight:700;color:var(--warning);margin-bottom:4px">À faire avant de décider</div>
+          Consultez un expert (notaire, fiscaliste ou conseiller) pour valider les hypothèses, surtout si vous avez plusieurs revenus, plusieurs biens, ou un montage via société.
+        </div>
+      </div>
+
+      <div class="footer">
+        <div>Aqar.ma — Contact</div>
+        <div>support@aqar.ma</div>
+      </div>
+    </div>
+  </body>
+</html>

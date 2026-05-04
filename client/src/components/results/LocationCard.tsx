@@ -4,6 +4,7 @@ import { QUARTIERS } from '@/data/quartiers';
 import { calculateIRRevenusFonciers, formatCurrency, formatPercent } from '@/lib/fiscalEngine';
 import { motion } from 'framer-motion';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 interface LocationCardProps {
   data?: Record<string, unknown>;
@@ -19,6 +20,8 @@ export default function LocationCard({ data = {} }: LocationCardProps) {
   const managementFeePct = typeof input.managementFeePct === 'number' ? input.managementFeePct : 0;
   const investorType = typeof input.investorType === 'string' ? input.investorType : 'individual';
   const salaried = typeof input.salaried === 'string' ? input.salaried : undefined;
+  const portfolioExistingLoansMonthly =
+    typeof input.portfolioExistingLoansMonthly === 'number' ? input.portfolioExistingLoansMonthly : 0;
 
   const results = data as any;
 
@@ -46,15 +49,25 @@ export default function LocationCard({ data = {} }: LocationCardProps) {
 
   const metrics = useMemo(() => {
     const taxLabel =
-      investorType === 'company' ? 'Impôt (IS estimé)' : 'Impôt (IR revenus locatifs)';
+      investorType === 'company' ? 'Impôt annuel (IS estimé)' : 'Impôt annuel (IR revenus locatifs)';
     const extra =
       investorType !== 'company' && salaried === 'yes' && typeof results.irIncremental === 'number' && results.irIncremental > 0
-        ? [{ label: 'Scénario salarié (IR progressif)', value: results.irIncremental, unit: 'DH' }]
+        ? [{ label: 'IR additionnel (hypothèse salarié)', value: results.irIncremental, unit: 'DH' }]
+        : [];
+    const afterExistingLoans =
+      portfolioExistingLoansMonthly > 0
+        ? [
+            {
+              label: 'Cashflow net/mois (après crédits existants)',
+              value: (results.cashflowNetMensuel ?? 0) - portfolioExistingLoansMonthly,
+              unit: 'DH',
+            },
+          ]
         : [];
     return [
       { label: 'Revenu brut annuel (effectif)', value: results.revenuBrutEffectif ?? results.revenuBrut, unit: 'DH' },
       { label: 'Charges non fiscales', value: results.chargesNonFiscales ?? 0, unit: 'DH' },
-      { label: 'Base imposable', value: results.baseImposable ?? 0, unit: 'DH' },
+      { label: 'Base imposable (revenu foncier net imposable)', value: results.baseImposable ?? 0, unit: 'DH' },
       { label: taxLabel, value: results.irAnnuel ?? 0, unit: 'DH' },
       { label: 'Revenu net annuel', value: results.revenuNet ?? 0, unit: 'DH' },
       { label: 'Rendement net', value: results.rendementNet ?? 0, unit: '%' },
@@ -65,15 +78,16 @@ export default function LocationCard({ data = {} }: LocationCardProps) {
             { label: 'Cashflow net/mois', value: results.cashflowNetMensuel ?? 0, unit: 'DH' },
           ]
         : []),
+      ...afterExistingLoans,
     ];
-  }, [investorType, results, salaried]);
+  }, [investorType, portfolioExistingLoansMonthly, results, salaried]);
 
   return (
     <div className="space-y-6">
       <div className="rounded-lg border border-border bg-muted/30 p-4">
         <div className="text-xs font-semibold text-foreground">Lecture rapide</div>
         <div className="text-xs text-muted-foreground mt-1">
-          Brut effectif (loyer − vacance) → charges (copro/entretien/assurance/taxes/gestion) → base imposable → impôt → net.
+          Loyer → brut annuel → brut effectif (vacance) → charges (copro/entretien/assurance/taxes/gestion) → base imposable → impôt → net.
         </div>
       </div>
       <div className="rounded-lg border border-border bg-muted/30 p-4">
@@ -129,6 +143,56 @@ export default function LocationCard({ data = {} }: LocationCardProps) {
         </div>
       </div>
 
+      <div className="rounded-lg border border-border bg-card">
+        <Accordion type="single" collapsible>
+          <AccordionItem value="definitions">
+            <AccordionTrigger className="px-4">Définitions (simple)</AccordionTrigger>
+            <AccordionContent className="px-4 text-xs text-muted-foreground space-y-2">
+              <div>
+                <div className="font-semibold text-foreground">IR annuel (location)</div>
+                <div>Impôt sur le revenu dû sur les revenus locatifs (ou IS estimé si investisseur = société).</div>
+              </div>
+              <div>
+                <div className="font-semibold text-foreground">Base imposable</div>
+                <div>Montant sur lequel on applique l’impôt. Ici, base = brut effectif × (1 − abattement).</div>
+              </div>
+              <div>
+                <div className="font-semibold text-foreground">Revenu net annuel</div>
+                <div>Ce qu’il reste après charges non fiscales et impôt.</div>
+              </div>
+              <div>
+                <div className="font-semibold text-foreground">Charges non fiscales</div>
+                <div>Charges d’exploitation + gestion + assurance + taxes locales (si renseignées/estimées).</div>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+          <AccordionItem value="calculs">
+            <AccordionTrigger className="px-4">Comment c’est calculé (avec vos chiffres)</AccordionTrigger>
+            <AccordionContent className="px-4 text-xs text-muted-foreground space-y-2">
+              <div className="space-y-1">
+                <div>
+                  Brut annuel = loyer × 12 = {formatCurrency(monthlyRent)} × 12 = {formatCurrency((monthlyRent ?? 0) * 12)}
+                </div>
+                <div>
+                  Brut effectif = brut annuel × (1 − vacance) = {formatCurrency(results.revenuBrut ?? 0)} × (1 − {formatPercent(vacancyRate / 100, 0)}) ={' '}
+                  {formatCurrency(results.revenuBrutEffectif ?? 0)}
+                </div>
+                <div>
+                  Base imposable = brut effectif × 60% (abattement 40%) = {formatCurrency(results.revenuBrutEffectif ?? 0)} × 60% ={' '}
+                  {formatCurrency(results.baseImposable ?? 0)}
+                </div>
+                <div>
+                  Impôt annuel = fonction de la base imposable = {formatCurrency(results.irAnnuel ?? 0)}
+                </div>
+                <div>
+                  Net annuel = brut effectif − charges non fiscales − impôt = {formatCurrency(results.revenuNet ?? 0)}
+                </div>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+      </div>
+
       {/* Classement quartiers */}
       <div className="space-y-2">
         <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide">
@@ -165,9 +229,29 @@ export default function LocationCard({ data = {} }: LocationCardProps) {
           <BarChart data={quartierData}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
             <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-            <YAxis tick={{ fontSize: 12 }} />
+            <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `${Number(v).toFixed(1)}%`} />
             <Tooltip
-              formatter={(value) => formatPercent(value as number / 100, 1)}
+              content={({ active, payload, label }) => {
+                if (!active || !payload || payload.length === 0) return null;
+                const row = payload[0]?.payload as any;
+                const rendement = typeof row?.rendementNet === 'number' ? row.rendementNet : 0;
+                const loyer = typeof row?.loyer === 'number' ? row.loyer : 0;
+                return (
+                  <div
+                    style={{
+                      backgroundColor: 'var(--background)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      padding: '10px',
+                    }}
+                  >
+                    <div className="font-semibold text-foreground">{label}</div>
+                    <div className="text-muted-foreground mt-1">Rendement net : {formatPercent(rendement / 100, 1)}</div>
+                    <div className="text-muted-foreground">Loyer estimé : {formatCurrency(loyer)}/mois</div>
+                  </div>
+                );
+              }}
               contentStyle={{
                 backgroundColor: 'var(--background)',
                 border: '1px solid var(--border)',

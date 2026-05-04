@@ -1,7 +1,7 @@
 /**
  * Moteur de calcul fiscal immobilier Maroc
  * Couvre : TPI, IR locatif, TH, TSC, frais d'enregistrement
- * Mise à jour : Loi Finances 2024
+ * Mise à jour : Loi Finances 2026
  */
 
 export interface AchatSimulation {
@@ -10,6 +10,7 @@ export interface AchatSimulation {
   typeImmobilier: 'neuf' | 'ancien' | 'terrain';
   dateAcquisition: Date;
   estExonere: boolean;
+  residentStatus?: 'resident' | 'mre_etranger';
 }
 
 export interface AchatResults {
@@ -17,7 +18,9 @@ export interface AchatResults {
   fraisEnregistrement: number;
   droitsEnregistrement: number;
   honorairesNotaire: number;
+  tvaHonoraires: number;
   fraisConservation: number;
+  fraisDivers: number;
   coutTotal: number;
   economieExoneration: number;
   quitusFiscalObligatoire: boolean;
@@ -31,11 +34,13 @@ export interface LocationSimulation {
   typeImmobilier: 'meuble' | 'non-meuble';
   depensesAnnuelles: number;
   investorType?: 'individual' | 'company';
+  residentStatus?: 'resident' | 'mre_etranger';
   vacancyRatePct?: number;
   managementFeePct?: number;
   insuranceAnnual?: number;
   propertyTaxesAnnual?: number;
   salaryAnnual?: number;
+  otherTaxableIncomeAnnual?: number;
   taxYear?: number;
   financing?: 'cash' | 'credit';
   downPayment?: number;
@@ -68,9 +73,11 @@ export interface AirbnbSimulation {
   tauxTaxesSejour: number;
   depensesAnnuelles: number;
   investorType?: 'individual' | 'company';
+  residentStatus?: 'resident' | 'mre_etranger';
   managementFeePct?: number;
   vacancyRatePct?: number;
   salaryAnnual?: number;
+  otherTaxableIncomeAnnual?: number;
   taxYear?: number;
 }
 
@@ -113,6 +120,7 @@ export interface TpiSimulation {
   typeImmobilier: 'neuf' | 'ancien';
   travaux: number;
   isResidencePrincipale: boolean;
+  residentStatus?: 'resident' | 'mre_etranger';
 }
 
 export interface TpiScenario {
@@ -134,48 +142,59 @@ export interface TpiResults {
 // ============ ACHAT ============
 
 export function calculateAchatCosts(sim: AchatSimulation): AchatResults {
-  const { prix, surface, typeImmobilier, dateAcquisition, estExonere } = sim;
+  const { prix, surface, typeImmobilier, dateAcquisition, estExonere, residentStatus } = sim;
 
-  // Frais d'enregistrement (droits d'enregistrement)
+  // Droits d'Enregistrement (D.E.)
   let tauxDroits = 0;
-  if (typeImmobilier === 'neuf') {
-    tauxDroits = estExonere ? 0 : 0.06; // 6% normal, 0% si exonéré
-  } else if (typeImmobilier === 'ancien') {
-    tauxDroits = 0.075; // 7.5% pour ancien
+  if (typeImmobilier === 'neuf' || typeImmobilier === 'ancien') {
+    tauxDroits = estExonere ? 0 : 0.04; // 4% pour le bâti
   } else {
     tauxDroits = 0.05; // 5% pour terrain
   }
-
   const droitsEnregistrement = prix * tauxDroits;
 
-  // Honoraires notaire (environ 0.5-1% du prix)
-  const honorairesNotaire = prix * 0.0075;
+  // Conservation Foncière (C.F.)
+  // 1.5% du prix déclaré + Droit fixe de 250 DH + certificat 100 DH. Min: 1000 DH
+  const fraisConservationCalculated = (prix * 0.015) + 350;
+  const fraisConservation = Math.max(1000, fraisConservationCalculated);
 
-  // Frais de conservation (environ 0.1% du prix)
-  const fraisConservation = prix * 0.001;
+  // Honoraires Notaire (Barème de référence: ~1% avec min 2500 DH)
+  const honorairesCalculated = prix * 0.01;
+  const honorairesNotaire = Math.max(2500, honorairesCalculated);
 
-  // Frais d'entrée (somme des frais)
-  const fraisEntree = droitsEnregistrement + honorairesNotaire + fraisConservation;
+  // TVA sur Honoraires Notaire (10%)
+  const tvaHonoraires = honorairesNotaire * 0.10;
+
+  // Frais divers (Timbres, minutes, expéditions) forfaitaires
+  const fraisDivers = 2000;
+
+  // Frais d'entrée totaux
+  const fraisEntree = droitsEnregistrement + fraisConservation + honorairesNotaire + tvaHonoraires + fraisDivers;
 
   // Coût total d'acquisition
   const coutTotal = prix + fraisEntree;
 
   // Économie d'exonération si applicable
-  const economieExoneration = estExonere ? prix * 0.06 : 0;
+  const economieExoneration = estExonere ? prix * 0.04 : 0;
 
   // Quitus fiscal obligatoire si bien acquis après juillet 2024
   const quitusFiscalObligatoire = dateAcquisition > new Date('2024-07-01');
+
+  // MRE note
+  const mreNote = residentStatus === 'mre_etranger' ? " | Note MRE : Pensez à déclarer l'apport en devises à l'Office des Changes pour garantir la convertibilité à la revente." : "";
 
   return {
     prixNet: prix,
     fraisEnregistrement: fraisEntree,
     droitsEnregistrement,
     honorairesNotaire,
+    tvaHonoraires,
     fraisConservation,
+    fraisDivers,
     coutTotal,
     economieExoneration,
     quitusFiscalObligatoire,
-    detailsCalcul: `Prix: ${prix} DH | Droits: ${droitsEnregistrement.toFixed(0)} DH | Honoraires: ${honorairesNotaire.toFixed(0)} DH | Conservation: ${fraisConservation.toFixed(0)} DH`,
+    detailsCalcul: `Prix: ${prix} DH | Droits (4-5%): ${droitsEnregistrement.toFixed(0)} DH | CF (1.5%): ${fraisConservation.toFixed(0)} DH | Honoraires (1%): ${honorairesNotaire.toFixed(0)} DH | TVA (10%): ${tvaHonoraires.toFixed(0)} DH | Divers: ${fraisDivers} DH${mreNote}`,
   };
 }
 
@@ -189,11 +208,13 @@ export function calculateLocationRevenue(sim: LocationSimulation): LocationResul
     typeImmobilier,
     depensesAnnuelles,
     investorType = 'individual',
+    residentStatus = 'resident',
     vacancyRatePct = 0,
     managementFeePct = 0,
     insuranceAnnual = 0,
     propertyTaxesAnnual = 0,
     salaryAnnual = 0,
+    otherTaxableIncomeAnnual = 0,
     taxYear = 2026,
     financing = 'cash',
     downPayment = 0,
@@ -210,6 +231,7 @@ export function calculateLocationRevenue(sim: LocationSimulation): LocationResul
   const mgmtPct = Math.min(30, Math.max(0, managementFeePct));
   const fraisGestion = revenuBrutEffectif * (mgmtPct / 100);
 
+  // Abattement de 40% (Art 63 CGI)
   const abattementFoncier = 0.4;
   const baseImposable = Math.max(0, revenuBrutEffectif * (1 - abattementFoncier));
   const irAnnuel = calculateIRRevenusFonciers(baseImposable);
@@ -217,17 +239,22 @@ export function calculateLocationRevenue(sim: LocationSimulation): LocationResul
     investorType === 'company'
       ? 0
       : calculateIRIncrementalFromAdditionalIncome({
-          baseIncomeAnnual: salaryAnnual,
+          baseIncomeAnnual: salaryAnnual + otherTaxableIncomeAnnual,
           additionalIncomeAnnual: baseImposable,
           taxYear,
         });
 
-  const chargesNonFiscales = depensesAnnuelles + fraisGestion + insuranceAnnual + propertyTaxesAnnual;
+  // Taxe des Services Communaux (TSC) estimée à 10.5% de la valeur locative (loyer brut)
+  // Souvent à la charge du proprio s'il ne la refacture pas.
+  const tscCalculee = revenuBrut * 0.105;
+  const tscAppliquee = propertyTaxesAnnual > 0 ? propertyTaxesAnnual : tscCalculee;
+
+  const chargesNonFiscales = depensesAnnuelles + fraisGestion + insuranceAnnual + tscAppliquee;
   const revenuNetAvantImpots = revenuBrutEffectif - chargesNonFiscales;
 
   const taxes =
     investorType === 'company'
-      ? Math.max(0, revenuNetAvantImpots) * 0.2
+      ? Math.max(0, revenuNetAvantImpots) * 0.2 // IS simplifié
       : irAnnuel;
   const revenuNet = revenuNetAvantImpots - taxes;
 
@@ -262,9 +289,7 @@ export function calculateLocationRevenue(sim: LocationSimulation): LocationResul
 }
 
 export function calculateIRRevenusFonciers(revenuFoncierNetImposableAnnuel: number): number {
-  const x = Math.max(0, revenuFoncierNetImposableAnnuel);
-  const t = 120000;
-  return x < t ? x * 0.1 : x * 0.15;
+  return calculateIRProgressiveAnnual(revenuFoncierNetImposableAnnuel, 2026);
 }
 
 // ============ AIRBNB ============
@@ -281,6 +306,7 @@ export function calculateAirbnbRevenue(sim: AirbnbSimulation): AirbnbResults {
     managementFeePct = 0,
     vacancyRatePct = 0,
     salaryAnnual = 0,
+    otherTaxableIncomeAnnual = 0,
     taxYear = 2026,
   } = sim;
 
@@ -309,7 +335,7 @@ export function calculateAirbnbRevenue(sim: AirbnbSimulation): AirbnbResults {
   // IR sur revenus Airbnb (taux plus élevé, activité commerciale)
   const irAirbnb = calculateIRAirbnb(profitAvantImpots);
   const irIncremental = calculateIRIncrementalFromAdditionalIncome({
-    baseIncomeAnnual: salaryAnnual,
+    baseIncomeAnnual: salaryAnnual + otherTaxableIncomeAnnual,
     additionalIncomeAnnual: profitAvantImpots,
     taxYear,
   });
@@ -367,8 +393,9 @@ function calculateIRProgressiveAnnual(incomeAnnual: number, taxYear: number): nu
   const x = Math.max(0, incomeAnnual);
   const year = Number.isFinite(taxYear) ? Math.trunc(taxYear) : 2026;
 
+  // Barème officiel Loi de Finances 2026
   const table =
-    year >= 2024
+    year >= 2026
       ? [
           { max: 30000, rate: 0, deduction: 0 },
           { max: 50000, rate: 0.1, deduction: 3000 },
@@ -453,27 +480,30 @@ export function calculateDetentionCosts(sim: DetentionSimulation): DetentionResu
 // ============ TPI (TAXE PLUS-VALUE) ============
 
 export function calculateTpi(sim: TpiSimulation): TpiResults {
-  const { prixVente, prixAcquisition, dureeDetention, typeImmobilier, travaux, isResidencePrincipale } = sim;
+  const { prixVente, prixAcquisition, dureeDetention, typeImmobilier, travaux, isResidencePrincipale, residentStatus } = sim;
 
   const held = Math.max(1, Math.min(40, Math.trunc(dureeDetention)));
   const fraisAcquisitionForfait = prixAcquisition * 0.15;
+  // Coefficient d'actualisation (exemple simplifié 3% par an, en réalité publié chaque année par le ministère)
   const coefficientRevalorisation = 1 + 0.03 * held;
 
-  const coutRevientBase = prixAcquisition * coefficientRevalorisation + fraisAcquisitionForfait;
+  const coutRevientBase = (prixAcquisition * coefficientRevalorisation) + fraisAcquisitionForfait;
   const coutRevientAvecTravaux = coutRevientBase + Math.max(0, travaux);
 
-  const profitBase = prixVente - coutRevientBase;
-  const profitAvecTravaux = prixVente - coutRevientAvecTravaux;
+  const profitBase = Math.max(0, prixVente - coutRevientBase);
+  const profitAvecTravaux = Math.max(0, prixVente - coutRevientAvecTravaux);
 
   const tauxTpi = 0.2;
-  const cotisationMinimale = prixVente * 0.03;
+  const cotisationMinimale = prixVente * 0.03; // Minimum de perception légal
 
-  const tpiStandard = Math.max(0, profitBase * tauxTpi);
-  const tpiTravaux = Math.max(0, profitAvecTravaux * tauxTpi);
+  const tpiStandard = profitBase * tauxTpi;
+  const tpiTravaux = profitAvecTravaux * tauxTpi;
+
+  const mreNote = residentStatus === 'mre_etranger' ? " (MRE: Garantie de retransfert assurée si achat déclaré)" : "";
 
   const scenarioA: TpiScenario = {
-    name: 'Standard',
-    description: 'TPI sur profit net (20%) + minimum 3% du prix de cession',
+    name: 'Standard' + mreNote,
+    description: 'TPI sur profit net réévalué (20%) + minimum 3% du prix de cession',
     tauxTpi,
     montantTpi: Math.max(tpiStandard, cotisationMinimale),
     montantDeductible: fraisAcquisitionForfait,
@@ -484,7 +514,7 @@ export function calculateTpi(sim: TpiSimulation): TpiResults {
   const eligibleResidence = Boolean(isResidencePrincipale) && held >= 6;
   const scenarioB: TpiScenario = {
     name: 'Résidence principale',
-    description: eligibleResidence ? 'Exonération (hypothèse: occupation >= 6 ans)' : 'Non applicable (hypothèse: occupation < 6 ans)',
+    description: eligibleResidence ? 'Exonération totale (occupation >= 6 ans)' : 'Non applicable (occupation < 6 ans)',
     tauxTpi: eligibleResidence ? 0 : tauxTpi,
     montantTpi: eligibleResidence ? 0 : Math.max(tpiStandard, cotisationMinimale),
     montantDeductible: fraisAcquisitionForfait,
@@ -493,8 +523,8 @@ export function calculateTpi(sim: TpiSimulation): TpiResults {
   };
 
   const scenarioC: TpiScenario = {
-    name: 'Avec travaux',
-    description: 'TPI avec ajout des travaux justifiables au coût de revient + minimum 3% du prix de cession',
+    name: 'Avec travaux justifiés',
+    description: 'TPI avec ajout des travaux facturés au coût de revient + minimum 3%',
     tauxTpi,
     montantTpi: Math.max(tpiTravaux, cotisationMinimale),
     montantDeductible: fraisAcquisitionForfait + Math.max(0, travaux),

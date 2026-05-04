@@ -5,7 +5,10 @@ import AchatCard from "@/components/results/AchatCard";
 import AirbnbCard from "@/components/results/AirbnbCard";
 import LocationCard from "@/components/results/LocationCard";
 import TpiCard from "@/components/results/TpiCard";
+import { generatePdf } from "@/components/PdfExport";
 import { getQuartierById } from "@/data/quartiers";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { toast as sonnerToast } from "sonner";
 import {
   calculateAchatCosts,
   calculateAirbnbRevenue,
@@ -21,6 +24,11 @@ type ResultsInput = {
   taxYear?: string | number;
   salaried?: string;
   salaryMonthly?: number;
+  portfolioHasProperties?: string;
+  portfolioCount?: number;
+  portfolioTotalValue?: number;
+  portfolioExistingLoansMonthly?: number;
+  otherTaxableIncomeAnnual?: number;
   investorType?: string;
   price?: number;
   surface?: number;
@@ -100,6 +108,12 @@ export default function Results() {
     const salaryMonthly = asNumber(input?.salaryMonthly) ?? 0;
     const salaryAnnual = salaried === "yes" ? salaryMonthly * 12 : 0;
 
+    const portfolioHasProperties = asString(input?.portfolioHasProperties);
+    const portfolioCount = asNumber(input?.portfolioCount) ?? 0;
+    const portfolioTotalValue = asNumber(input?.portfolioTotalValue) ?? 0;
+    const portfolioExistingLoansMonthly = asNumber(input?.portfolioExistingLoansMonthly) ?? 0;
+    const otherTaxableIncomeAnnual = asNumber(input?.otherTaxableIncomeAnnual) ?? 0;
+
     const investorTypeRaw = asString(input?.investorType);
     const investorType: "individual" | "company" =
       investorTypeRaw === "company" ? "company" : "individual";
@@ -133,6 +147,11 @@ export default function Results() {
       salaried,
       salaryMonthly,
       salaryAnnual,
+      portfolioHasProperties,
+      portfolioCount,
+      portfolioTotalValue,
+      portfolioExistingLoansMonthly,
+      otherTaxableIncomeAnnual,
       investorType,
       sell,
       price,
@@ -205,6 +224,7 @@ export default function Results() {
       insuranceAnnual: parsed.insuranceAnnual,
       propertyTaxesAnnual: parsed.propertyTaxesAnnual,
       salaryAnnual: parsed.salaryAnnual,
+      otherTaxableIncomeAnnual: parsed.otherTaxableIncomeAnnual,
       taxYear: parsed.taxYear,
       financing: parsed.financing,
       downPayment: parsed.downPayment,
@@ -224,6 +244,7 @@ export default function Results() {
     parsed.price,
     parsed.propertyTaxesAnnual,
     parsed.salaryAnnual,
+    parsed.otherTaxableIncomeAnnual,
     parsed.sell,
     parsed.taxYear,
     parsed.vacancyRate,
@@ -244,6 +265,7 @@ export default function Results() {
       managementFeePct: parsed.managementFeePct,
       vacancyRatePct: parsed.vacancyRate,
       salaryAnnual: parsed.salaryAnnual,
+      otherTaxableIncomeAnnual: parsed.otherTaxableIncomeAnnual,
       taxYear: parsed.taxYear,
     });
   }, [
@@ -256,6 +278,7 @@ export default function Results() {
     parsed.occupancyRate,
     parsed.price,
     parsed.salaryAnnual,
+    parsed.otherTaxableIncomeAnnual,
     parsed.taxYear,
     parsed.vacancyRate,
     parsed.wantAirbnb,
@@ -277,13 +300,27 @@ export default function Results() {
   const headerKpis = useMemo(() => {
     const kpis: Array<{ label: string; value: string }> = [];
     if (locationResults) {
-      kpis.push({ label: "Brut annuel (Location)", value: formatCurrency(locationResults.revenuBrut) });
-      kpis.push({ label: "IR annuel (Location)", value: formatCurrency(locationResults.irAnnuel) });
-      kpis.push({ label: "Net annuel (Location)", value: formatCurrency(locationResults.revenuNet) });
+      kpis.push({
+        label: "Brut annuel (effectif)",
+        value: formatCurrency(locationResults.revenuBrutEffectif ?? locationResults.revenuBrut),
+      });
+      kpis.push({ label: "Base imposable", value: formatCurrency(locationResults.baseImposable) });
+      kpis.push({
+        label: parsed.investorType === "company" ? "Impôt annuel (IS estimé)" : "Impôt annuel (IR revenus locatifs)",
+        value: formatCurrency(locationResults.irAnnuel),
+      });
+      kpis.push({ label: "Net annuel", value: formatCurrency(locationResults.revenuNet) });
+      kpis.push({ label: "Rendement net", value: `${locationResults.rendementNet.toFixed(1)}%` });
       if (locationResults.mensualiteCredit > 0) {
         kpis.push({ label: "Mensualité crédit", value: formatCurrency(locationResults.mensualiteCredit) });
       }
       kpis.push({ label: "Cashflow net/mois", value: formatCurrency(locationResults.cashflowNetMensuel) });
+      if (parsed.portfolioExistingLoansMonthly > 0) {
+        kpis.push({
+          label: "Cashflow net/mois (après crédits existants)",
+          value: formatCurrency(locationResults.cashflowNetMensuel - parsed.portfolioExistingLoansMonthly),
+        });
+      }
     }
     if (airbnbResults) {
       kpis.push({ label: "Brut annuel (Airbnb)", value: formatCurrency(airbnbResults.revenuBrutAnnuel) });
@@ -294,7 +331,94 @@ export default function Results() {
       kpis.push({ label: "Économie max (TPI)", value: formatCurrency(tpiResults.economieMax) });
     }
     return kpis;
-  }, [airbnbResults, locationResults, tpiResults]);
+  }, [airbnbResults, locationResults, parsed.investorType, tpiResults]);
+
+  const reportData = useMemo(() => {
+    return {
+      input: parsed,
+      achat: achatResults,
+      location: locationResults,
+      airbnb: airbnbResults,
+      tpi: tpiResults,
+    };
+  }, [achatResults, airbnbResults, locationResults, parsed, tpiResults]);
+
+  const buildServerReportPayload = () => {
+    const cityLabel = parsed.city === "fes" ? "Fès" : parsed.city === "rabat" ? "Rabat" : "Casablanca";
+    const financingLabel = parsed.financing === "credit" ? "Crédit" : "Cash";
+    const salaryNetMonthly = parsed.salaried === "yes" ? parsed.salaryMonthly : 0;
+    const taxesLocales = parsed.propertyTaxesAnnual;
+
+    const achat = achatResults as any;
+    const loc = locationResults as any;
+    const air = airbnbResults as any;
+
+    return {
+      ville: cityLabel,
+      quartier: quartier?.name ?? "",
+      prix: parsed.price || 0,
+      surface: parsed.surface || 0,
+      financement: financingLabel,
+      loyer_mensuel: parsed.monthlyRent || 0,
+      vacance_pct: parsed.vacancyRate || 0,
+      gestion_pct: parsed.managementFeePct || 0,
+      statut_salarie: parsed.salaried === "yes",
+      salaire_net_mensuel: salaryNetMonthly || 0,
+      autres_revenus: parsed.otherTaxableIncomeAnnual || 0,
+      annee_fiscale: parsed.taxYear || 2026,
+
+      frais_entree: achat?.fraisEnregistrement ?? null,
+      cout_total: achat?.coutTotal ?? null,
+      droits_enregistrement: achat?.droitsEnregistrement ?? null,
+      honoraires_notaire: achat?.honorairesNotaire ?? null,
+      conservation_fonciere: achat?.fraisConservation ?? null,
+
+      brut_annuel: loc?.revenuBrut ?? null,
+      brut_effectif: loc?.revenuBrutEffectif ?? null,
+      charges_non_fiscales: loc?.chargesNonFiscales ?? null,
+      base_imposable: loc?.baseImposable ?? null,
+      impot_annuel: loc?.irAnnuel ?? null,
+      net_annuel: loc?.revenuNet ?? null,
+      rendement_net_pct: loc?.rendementNet ?? null,
+      cashflow_net_mois: loc?.cashflowNetMensuel ?? null,
+
+      depenses_exploitation: parsed.operatingExpensesAnnual ?? null,
+      frais_gestion: loc?.fraisGestion ?? null,
+      assurance: parsed.insuranceAnnual ?? null,
+      taxes_locales_annuelles: taxesLocales ?? null,
+      type_occupation_bien: "loue",
+
+      airbnb_net_annuel: air?.revenuNetAnnuel ?? null,
+      airbnb_impot_annuel: air?.chargesFiscales ?? null,
+
+      quartiers_comparaison: null,
+
+      date_generation: new Date().toLocaleDateString("fr-FR"),
+      type_rapport: "Simulation",
+    };
+  };
+
+  const downloadServerPdf = async () => {
+    const payload = buildServerReportPayload();
+    const resp = await fetch("/api/report/pdf", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!resp.ok) {
+      const txt = await resp.text().catch(() => "");
+      throw new Error(txt || "Export PDF impossible");
+    }
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `rapport-aqar-${parsed.city ?? "casa"}-${new Date().toISOString().slice(0, 10)}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
 
   const recapItems = useMemo(() => {
     const items: Array<{ label: string; value: string }> = [];
@@ -308,6 +432,20 @@ export default function Results() {
     if (parsed.salaried === "yes") {
       items.push({ label: "Salaire net mensuel", value: parsed.salaryMonthly ? `${formatCurrency(parsed.salaryMonthly)}/mois` : "—" });
     }
+    items.push({
+      label: "Biens existants",
+      value:
+        parsed.portfolioHasProperties === "some"
+          ? `${Math.trunc(parsed.portfolioCount)} bien(s)`
+          : parsed.portfolioHasProperties === "none"
+            ? "0 bien"
+            : "—",
+    });
+    if (parsed.portfolioHasProperties === "some") {
+      items.push({ label: "Valeur totale biens", value: formatCurrency(parsed.portfolioTotalValue) });
+      items.push({ label: "Mensualités crédits existants", value: `${formatCurrency(parsed.portfolioExistingLoansMonthly)}/mois` });
+    }
+    items.push({ label: "Autres revenus imposables", value: formatCurrency(parsed.otherTaxableIncomeAnnual) });
     items.push({
       label: "Mode d’investissement",
       value: parsed.investorType === "company" ? "Société / agence" : "Personne physique",
@@ -377,10 +515,10 @@ export default function Results() {
   }
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-[100dvh] bg-background">
       <Sidebar />
 
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         <div className="px-8 py-6 border-b border-border bg-muted/30 flex items-center justify-between gap-4">
           <div className="min-w-0">
             <h1
@@ -398,6 +536,29 @@ export default function Results() {
             </p>
           </div>
           <div className="flex gap-2 shrink-0">
+            <button
+              className="px-3 py-2 rounded-lg bg-muted text-foreground text-sm font-medium hover:bg-muted/80"
+              onClick={async () => {
+                try {
+                  await downloadServerPdf();
+                  sonnerToast.success("Rapport PDF téléchargé", {
+                    description: "Version serveur (template premium).",
+                  });
+                } catch {
+                  generatePdf({
+                    flowType: "Simulation",
+                    city: parsed.city ?? "casa",
+                    quartier: quartier?.name,
+                    data: reportData as any,
+                  });
+                  sonnerToast.warning("Rapport PDF simplifié téléchargé", {
+                    description: "Le générateur serveur n’est pas disponible sur cet environnement.",
+                  });
+                }
+              }}
+            >
+              Télécharger le rapport PDF
+            </button>
             <button
               className="px-3 py-2 rounded-lg bg-muted text-foreground text-sm font-medium hover:bg-muted/80"
               onClick={() => setLocation("/")}
@@ -418,7 +579,7 @@ export default function Results() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-8">
+        <div className="flex-1 min-h-0 overflow-y-auto p-8">
           <div className="rounded-lg border border-border bg-card p-6 mb-8">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
@@ -441,6 +602,60 @@ export default function Results() {
                   <div className="text-sm font-semibold text-foreground truncate">{it.value}</div>
                 </div>
               ))}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-border bg-card p-6 mb-8">
+            <h2 className="text-sm font-semibold text-foreground">Comprendre les chiffres</h2>
+            <p className="text-xs text-muted-foreground mt-1">
+              Définitions rapides pour lire le résultat sans jargon financier.
+            </p>
+            <div className="mt-4">
+              <Accordion type="single" collapsible>
+                <AccordionItem value="ir">
+                  <AccordionTrigger>IR annuel / impôt annuel</AccordionTrigger>
+                  <AccordionContent className="text-xs text-muted-foreground space-y-2">
+                    <div>
+                      C’est l’impôt estimé dû sur les revenus locatifs (ou IS estimé si investisseur = société).
+                    </div>
+                    <div>
+                      Pour la location longue durée, on part d’une base imposable puis on applique un taux d’IR paramétré.
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+                <AccordionItem value="base">
+                  <AccordionTrigger>Base imposable</AccordionTrigger>
+                  <AccordionContent className="text-xs text-muted-foreground space-y-2">
+                    <div>
+                      La base imposable est le montant sur lequel on calcule l’impôt. Ce n’est pas le “net dans votre poche”.
+                    </div>
+                    <div>
+                      Exemple (simplifié) : base = brut effectif × (1 − abattement).
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+                <AccordionItem value="entree">
+                  <AccordionTrigger>Frais d’entrée / coût total</AccordionTrigger>
+                  <AccordionContent className="text-xs text-muted-foreground space-y-2">
+                    <div>
+                      Les frais d’entrée sont des frais liés à l’achat (droits d’enregistrement, notaire, conservation). Ils
+                      s’ajoutent au prix du bien.
+                    </div>
+                    <div>
+                      Coût total acquisition = prix du bien + frais d’entrée.
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+                <AccordionItem value="economie">
+                  <AccordionTrigger>Économie max (TPI)</AccordionTrigger>
+                  <AccordionContent className="text-xs text-muted-foreground space-y-2">
+                    <div>
+                      Montant d’impôt “économisé” en choisissant le scénario de calcul le plus avantageux, par rapport au
+                      scénario standard.
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
             </div>
           </div>
 
@@ -476,6 +691,7 @@ export default function Results() {
                       investorType: parsed.investorType,
                       salaried: parsed.salaried,
                       taxYear: parsed.taxYear,
+                      portfolioExistingLoansMonthly: parsed.portfolioExistingLoansMonthly,
                     },
                   }}
                 />
@@ -494,6 +710,7 @@ export default function Results() {
                       investorType: parsed.investorType,
                       salaried: parsed.salaried,
                       taxYear: parsed.taxYear,
+                      portfolioExistingLoansMonthly: parsed.portfolioExistingLoansMonthly,
                     },
                   }}
                 />

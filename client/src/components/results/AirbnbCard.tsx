@@ -12,6 +12,8 @@ export default function AirbnbCard({ data = {} }: AirbnbCardProps) {
   const input = ((data as any).input ?? {}) as Record<string, unknown>;
   const investorType = typeof input.investorType === 'string' ? input.investorType : 'individual';
   const salaried = typeof input.salaried === 'string' ? input.salaried : undefined;
+  const portfolioExistingLoansMonthly =
+    typeof input.portfolioExistingLoansMonthly === 'number' ? input.portfolioExistingLoansMonthly : 0;
 
   const revenuBrutAnnuel = asNumber((data as any).revenuBrutAnnuel);
   const revenuBrutEffectifAnnuel = asNumber((data as any).revenuBrutEffectifAnnuel, revenuBrutAnnuel);
@@ -30,6 +32,10 @@ export default function AirbnbCard({ data = {} }: AirbnbCardProps) {
       investorType !== 'company' && salaried === 'yes' && irIncremental > 0
         ? [{ label: 'Scénario salarié (IR progressif)', value: irIncremental, unit: 'DH' }]
         : [];
+    const afterExistingLoans =
+      portfolioExistingLoansMonthly > 0
+        ? [{ label: 'Net mensuel (après crédits existants)', value: revenuNetMensuel - portfolioExistingLoansMonthly, unit: 'DH' }]
+        : [];
     return [
       { label: 'Brut annuel (effectif)', value: revenuBrutEffectifAnnuel, unit: 'DH' },
       { label: 'Commission plateforme', value: commissionsAirbnb, unit: 'DH' },
@@ -38,10 +44,11 @@ export default function AirbnbCard({ data = {} }: AirbnbCardProps) {
       { label: taxLabel, value: chargesFiscales, unit: 'DH' },
       { label: 'Net annuel', value: revenuNetAnnuel, unit: 'DH' },
       { label: 'Net mensuel', value: revenuNetMensuel, unit: 'DH' },
+      ...afterExistingLoans,
       { label: 'Rendement annuel', value: rendementAnnuel, unit: '%' },
       ...extra,
     ];
-  }, [chargesFiscales, commissionsAirbnb, fraisGestion, investorType, irIncremental, rendementAnnuel, revenuBrutEffectifAnnuel, revenuNetAnnuel, revenuNetMensuel, salaried, taxesSejour]);
+  }, [chargesFiscales, commissionsAirbnb, fraisGestion, investorType, irIncremental, portfolioExistingLoansMonthly, rendementAnnuel, revenuBrutEffectifAnnuel, revenuNetAnnuel, revenuNetMensuel, salaried, taxesSejour]);
 
   return (
     <div className="space-y-6">
